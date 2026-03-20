@@ -32,9 +32,9 @@ class SpendingProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final percentage = (spent / limit) * 100;
+    final percentage = limit > 0 ? (spent / limit) * 100 : 0.0;
     final progressColor = _getProgressColor(percentage);
-    final progress = (spent / limit).clamp(0.0, 1.0);
+    final progress = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -106,7 +106,11 @@ class _MainAppState extends State<MainApp> {
   Widget _buildBody(int index) {
     switch (index) {
       case 0:
-        return const HomeScreen();
+        return HomeScreen(
+          onAvatarTap: () => setState(() => _selectedIndex = 3),
+          onBalanceTap: () => setState(() => _selectedIndex = 2),
+          onAllTransactionsTap: () => setState(() => _selectedIndex = 1),
+        );
       case 1:
         return const TransactionsScreen();
       case 2:
