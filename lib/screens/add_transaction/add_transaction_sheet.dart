@@ -339,7 +339,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final suggestionLimit = _transactionType == TransactionType.expense
         ? selectedWalletBalance?.floor()
         : null;
-    final suggestionMin = _transactionType == TransactionType.income ? 1000 : null;
+    final suggestionMin =
+      (_transactionType == TransactionType.income ||
+        _transactionType == TransactionType.expense)
+      ? 1000
+      : null;
     final suggestionMax = _transactionType == TransactionType.income
       ? 100000000
       : suggestionLimit;
@@ -410,7 +414,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     int? minAmount,
     int? maxAmount,
   }) {
-    final multipliers = [1000, 10000, 100000,1000000,10000000,100000000];
+    final multipliers = [10,100,1000, 10000, 100000,1000000,10000000,100000000];
     final suggestions = <int>{};
 
     for (final multiplier in multipliers) {
@@ -428,7 +432,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   Widget _buildQuickAmountChip(int amount) {
     return FilterChip(
       label: Text(
-        AppCurrency.format(amount.toDouble()),
+        '${_formatAmount(amount.toString())} ${AppCurrency.symbol}',
         style: const TextStyle(fontSize: 12),
       ),
       onSelected: (_) {

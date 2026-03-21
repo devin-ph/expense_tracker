@@ -210,6 +210,10 @@ class _MainAppState extends State<MainApp> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 600),
+        reverseDuration: Duration(milliseconds: 320),
+      ),
       builder: (context) => Container(
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
