@@ -91,6 +91,20 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       'Khác',
     ],
   };
+  static const Map<String, List<String>> _incomeCategoryOptions = {
+    'cat_income': [
+      'Lương tháng',
+      'Lương làm thêm',
+      'Phụ cấp',
+      'Khác',
+    ],
+    'cat_bonus': [
+      'Thưởng hiệu suất',
+      'Thưởng lễ/tết',
+      'Hoa hồng',
+      'Khác',
+    ],
+  };
 
   late TransactionType _transactionType;
   final _formKey = GlobalKey<FormState>();
@@ -102,7 +116,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   String? _selectedWalletId;
   String? _selectedCategoryId;
   String? _selectedExpenseOption;
-  String? _expandedExpenseGroupId;
+  String? _selectedIncomeOption;
   final List<_AttachmentItem> _attachments = [];
   bool _isPickingAttachment = false;
   bool _isLoading = false;
@@ -284,7 +298,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 _transactionType = type;
                 _selectedCategoryId = null; // Reset category when type changes
                 _selectedExpenseOption = null;
-                _expandedExpenseGroupId = null;
+                _selectedIncomeOption = null;
                 _otherExpenseController.clear();
               });
             },
@@ -325,10 +339,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final suggestionLimit = _transactionType == TransactionType.expense
         ? selectedWalletBalance?.floor()
         : null;
+    final suggestionMin = _transactionType == TransactionType.income ? 1000 : null;
+    final suggestionMax = _transactionType == TransactionType.income
+      ? 100000000
+      : suggestionLimit;
     final suggestions = currentAmount > 0
         ? _buildZeroExpandedSuggestions(
             currentAmount,
-            maxAmount: suggestionLimit,
+        minAmount: suggestionMin,
+        maxAmount: suggestionMax,
           )
         : const <int>[];
 
@@ -367,6 +386,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   ),
                 );
               });
+            } else {
+              setState(() {
+                _amountController.value = const TextEditingValue(text: '');
+              });
             }
           },
         ),
@@ -382,13 +405,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     );
   }
 
-  List<int> _buildZeroExpandedSuggestions(int baseAmount, {int? maxAmount}) {
-    final multipliers = [10, 100, 1000, 10000, 100000];
+  List<int> _buildZeroExpandedSuggestions(
+    int baseAmount, {
+    int? minAmount,
+    int? maxAmount,
+  }) {
+    final multipliers = [1000, 10000, 100000,1000000,10000000,100000000];
     final suggestions = <int>{};
 
     for (final multiplier in multipliers) {
       final amount = baseAmount * multiplier;
-      if (maxAmount == null || amount <= maxAmount) {
+      final meetsMin = minAmount == null || amount >= minAmount;
+      final meetsMax = maxAmount == null || amount < maxAmount;
+      if (meetsMin && meetsMax) {
         suggestions.add(amount);
       }
     }
@@ -418,38 +447,63 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       return _buildExpenseCategorySelection();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Danh mục', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.md),
-        Consumer<CategoryNotifier>(
-          builder: (context, categoryNotifier, _) {
-            final categories = categoryNotifier.getCategoriesByType(
-              _transactionType,
-            );
+    if (_transactionType == TransactionType.income) {
+      return _buildIncomeCategorySelection();
+    }
 
-            if (categories.isEmpty) {
-              return Text(
-                'Không có danh mục cho loại ${_transactionType.label}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              );
-            }
+    return const SizedBox.shrink();
+  }
 
-            // Check if current selected category is valid for this type
-            final currentCategoryValid = categories.any(
-              (c) => c.id == _selectedCategoryId,
-            );
-            final effectiveValue = currentCategoryValid ? _selectedCategoryId : null;
+  Widget _buildIncomeCategorySelection() {
+    return Consumer<CategoryNotifier>(
+      builder: (context, categoryNotifier, _) {
+        final categories = categoryNotifier.getCategoriesByType(
+          TransactionType.income,
+        );
 
-            if (!currentCategoryValid && _selectedCategoryId != null) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                setState(() => _selectedCategoryId = null);
-              });
-            }
+        if (categories.isEmpty) {
+          return Text(
+            'Không có danh mục cho loại ${_transactionType.label}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          );
+        }
 
-            return Container(
+        final hasSelectedCategory = categories.any((c) => c.id == _selectedCategoryId);
+        if (_selectedCategoryId != null && !hasSelectedCategory) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedCategoryId = null;
+              _selectedIncomeOption = null;
+            });
+          });
+        }
+
+        final selectedCategory = categories.where(
+          (category) => category.id == _selectedCategoryId,
+        );
+        final selectedCategoryId =
+            selectedCategory.isNotEmpty ? selectedCategory.first.id : null;
+        final selectedOptions = selectedCategoryId != null
+            ? (_incomeCategoryOptions[selectedCategoryId] ?? const <String>[])
+            : const <String>[];
+        final hasSelectedOption = selectedOptions.contains(_selectedIncomeOption);
+
+        if (_selectedIncomeOption != null && !hasSelectedOption) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedIncomeOption = null;
+            });
+          });
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Danh mục', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.md),
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               decoration: BoxDecoration(
                 border: Border.all(
@@ -462,17 +516,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   isExpanded: true,
-                  value: effectiveValue,
-                  hint: const Text('Chọn danh mục'),
+                  value: selectedCategoryId,
+                  hint: const Text('Chọn nhóm danh mục thu nhập'),
                   items: categories.map<DropdownMenuItem<String>>((category) {
                     return DropdownMenuItem<String>(
                       value: category.id,
                       child: Row(
                         children: [
-                          Text(
-                            category.icon,
-                            style: const TextStyle(fontSize: 20),
-                          ),
+                          Text(category.icon, style: const TextStyle(fontSize: 20)),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(child: Text(category.name)),
                         ],
@@ -480,18 +531,54 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     );
                   }).toList(),
                   onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _selectedCategoryId = value);
-                    }
+                    setState(() {
+                      _selectedCategoryId = value;
+                      _selectedIncomeOption = null;
+                    });
                   },
                 ),
               ),
-            );
-          },
-        ),
-        if (_showValidationErrors && _hasCategoryError)
-          _buildValidationErrorText('Vui lòng chọn danh mục'),
-      ],
+            ),
+            if (_showValidationErrors && _hasCategoryError)
+              _buildValidationErrorText('Vui lòng chọn danh mục'),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: _showValidationErrors && _hasIncomeOptionError
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).primaryColor.withOpacity(0.3),
+                ),
+                borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: hasSelectedOption ? _selectedIncomeOption : null,
+                  hint: const Text('Chọn chi tiết danh mục thu nhập'),
+                  items: selectedOptions.map<DropdownMenuItem<String>>((option) {
+                    return DropdownMenuItem<String>(
+                      value: option,
+                      child: Text(option),
+                    );
+                  }).toList(),
+                  onChanged: selectedCategoryId == null || selectedOptions.isEmpty
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _selectedIncomeOption = value;
+                          });
+                        },
+                ),
+              ),
+            ),
+            if (_showValidationErrors && _hasIncomeOptionError)
+              _buildValidationErrorText('Vui lòng chọn chi tiết danh mục thu nhập'),
+          ],
+        );
+      },
     );
   }
 
@@ -519,7 +606,26 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             setState(() {
               _selectedCategoryId = null;
               _selectedExpenseOption = null;
-              _expandedExpenseGroupId = null;
+            });
+          });
+        }
+
+        final selectedCategory = categories.where(
+          (category) => category.id == _selectedCategoryId,
+        );
+        final selectedCategoryId =
+            selectedCategory.isNotEmpty ? selectedCategory.first.id : null;
+        final selectedOptions = selectedCategoryId != null
+            ? (_expenseCategoryOptions[selectedCategoryId] ?? const <String>[])
+            : const <String>[];
+        final hasSelectedOption = selectedOptions.contains(_selectedExpenseOption);
+
+        if (_selectedExpenseOption != null && !hasSelectedOption) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedExpenseOption = null;
+              _otherExpenseController.clear();
             });
           });
         }
@@ -530,76 +636,86 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             Text('Danh mục', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.md),
             Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: _showValidationErrors &&
-                          (_hasCategoryError || _hasExpenseOptionError)
+                  color: _showValidationErrors && _hasCategoryError
                       ? Theme.of(context).colorScheme.error
                       : Theme.of(context).primaryColor.withOpacity(0.3),
                 ),
                 borderRadius: BorderRadius.circular(AppBorderRadius.lg),
               ),
-              child: Column(
-                children: categories.map((category) {
-                  final isExpanded = _expandedExpenseGroupId == category.id;
-                  final isSelected = _selectedCategoryId == category.id;
-                  final options =
-                      _expenseCategoryOptions[category.id] ?? const <String>[];
-
-                  return ExpansionTile(
-                    initiallyExpanded: isExpanded,
-                    leading: Text(
-                      category.icon,
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                    title: Text(category.name),
-                    tilePadding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    onExpansionChanged: (expanded) {
-                      setState(() {
-                        _expandedExpenseGroupId = expanded ? category.id : null;
-                      });
-                    },
-                    children: options.map((option) {
-                      final optionSelected =
-                          isSelected && _selectedExpenseOption == option;
-                      return ListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                        ),
-                        title: Text(option),
-                        trailing: optionSelected
-                            ? Icon(
-                                Icons.check_circle,
-                                color: Theme.of(context).primaryColor,
-                                size: 18,
-                              )
-                            : null,
-                        onTap: () async {
-                          if (option == 'Khác') {
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedCategoryId,
+                  hint: const Text('Chọn nhóm danh mục chi tiêu'),
+                  items: categories.map<DropdownMenuItem<String>>((category) {
+                    return DropdownMenuItem<String>(
+                      value: category.id,
+                      child: Row(
+                        children: [
+                          Text(category.icon, style: const TextStyle(fontSize: 20)),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(child: Text(category.name)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCategoryId = value;
+                      _selectedExpenseOption = null;
+                      _otherExpenseController.clear();
+                    });
+                  },
+                ),
+              ),
+            ),
+            if (_showValidationErrors && _hasCategoryError)
+              _buildValidationErrorText('Vui lòng chọn danh mục'),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: _showValidationErrors && _hasExpenseOptionError
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).primaryColor.withOpacity(0.3),
+                ),
+                borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: hasSelectedOption ? _selectedExpenseOption : null,
+                  hint: const Text('Chọn chi tiết danh mục'),
+                  items: selectedOptions.map<DropdownMenuItem<String>>((option) {
+                    return DropdownMenuItem<String>(
+                      value: option,
+                      child: Text(option),
+                    );
+                  }).toList(),
+                  onChanged: selectedCategoryId == null
+                      ? null
+                      : (value) async {
+                          if (value == null) return;
+                          if (value == 'Khác') {
                             final confirmed = await _promptOtherExpenseDetail();
                             if (!confirmed || !mounted) return;
                           }
 
                           setState(() {
-                            _selectedCategoryId = category.id;
-                            _selectedExpenseOption = option;
-                            _expandedExpenseGroupId = null;
-                            if (option != 'Khác') {
+                            _selectedExpenseOption = value;
+                            if (value != 'Khác') {
                               _otherExpenseController.clear();
                             }
                           });
                         },
-                      );
-                    }).toList(),
-                  );
-                }).toList(),
+                ),
               ),
             ),
-            if (_showValidationErrors && (_hasCategoryError || _hasExpenseOptionError))
+            if (_showValidationErrors && _hasExpenseOptionError)
               _buildValidationErrorText('Vui lòng chọn chi tiết danh mục chi tiêu'),
           ],
         );
@@ -1066,7 +1182,21 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   bool get _hasExpenseOptionError =>
       _transactionType == TransactionType.expense &&
+      _selectedCategoryId != null &&
       (_selectedExpenseOption == null || _selectedExpenseOption!.trim().isEmpty);
+
+  bool get _hasIncomeOptionError {
+    if (_transactionType != TransactionType.income || _selectedCategoryId == null) {
+      return false;
+    }
+
+    final options = _incomeCategoryOptions[_selectedCategoryId!] ?? const <String>[];
+    if (options.isEmpty) {
+      return false;
+    }
+
+    return _selectedIncomeOption == null || _selectedIncomeOption!.trim().isEmpty;
+  }
 
   bool get _hasOtherExpenseError =>
       _isOtherExpenseSelected && _otherExpenseController.text.trim().isEmpty;
@@ -1121,6 +1251,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       return 'Vui lòng chọn chi tiết danh mục chi tiêu';
     }
 
+    if (_hasIncomeOptionError) {
+      return 'Vui lòng chọn chi tiết danh mục thu nhập';
+    }
+
     if (_hasOtherExpenseError) {
       return 'Vui lòng nhập thông tin chi tiêu';
     }
@@ -1131,9 +1265,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   String _buildTransactionNote() {
     final rawNote = _noteController.text.trim();
     final otherExpenseDetail = _otherExpenseController.text.trim();
-    if (_transactionType != TransactionType.expense ||
-        _selectedExpenseOption == null ||
-        _selectedExpenseOption!.isEmpty) {
+    if (_transactionType == TransactionType.income) {
+      if (_selectedIncomeOption == null || _selectedIncomeOption!.isEmpty) {
+        return rawNote;
+      }
+
+      if (rawNote.isEmpty) {
+        return _selectedIncomeOption!;
+      }
+
+      return '${_selectedIncomeOption!} - $rawNote';
+    }
+
+    if (_selectedExpenseOption == null || _selectedExpenseOption!.isEmpty) {
       return rawNote;
     }
 
