@@ -73,6 +73,7 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
+  TransactionType _activeTransactionType = TransactionType.income;
 
   @override
   void initState() {
@@ -112,7 +113,11 @@ class _MainAppState extends State<MainApp> {
           onAllTransactionsTap: () => setState(() => _selectedIndex = 1),
         );
       case 1:
-        return const TransactionsScreen();
+        return TransactionsScreen(
+          onTypeChanged: (type) {
+            _activeTransactionType = type;
+          },
+        );
       case 2:
         return const StatisticsScreen();
       case 3:
@@ -199,6 +204,8 @@ class _MainAppState extends State<MainApp> {
   }
 
   void _showAddTransactionSheet() {
+    final isTransactionsTab = _selectedIndex == 1;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -212,6 +219,10 @@ class _MainAppState extends State<MainApp> {
           ),
         ),
         child: AddTransactionSheet(
+          initialType: isTransactionsTab
+              ? _activeTransactionType
+              : TransactionType.expense,
+          lockTransactionType: isTransactionsTab,
           onTransactionAdded: () {
             setState(() {});
           },

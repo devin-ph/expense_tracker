@@ -8,6 +8,7 @@ class Transaction {
   final TransactionType type;
   final double amount;
   final String? note;
+  final List<String> attachments;
   final DateTime date;
   final DateTime createdAt;
 
@@ -19,6 +20,7 @@ class Transaction {
     required this.type,
     required this.amount,
     this.note,
+    this.attachments = const [],
     required this.date,
     required this.createdAt,
   });
@@ -31,6 +33,7 @@ class Transaction {
     TransactionType? type,
     double? amount,
     String? note,
+    List<String>? attachments,
     DateTime? date,
     DateTime? createdAt,
   }) {
@@ -42,6 +45,7 @@ class Transaction {
       type: type ?? this.type,
       amount: amount ?? this.amount,
       note: note ?? this.note,
+      attachments: attachments ?? this.attachments,
       date: date ?? this.date,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -56,6 +60,11 @@ class Transaction {
       type: TransactionType.values[json['type'] as int],
       amount: (json['amount'] as num).toDouble(),
       note: json['note'] as String?,
+      attachments:
+          (json['attachments'] as List<dynamic>?)
+              ?.map((item) => item.toString())
+              .toList() ??
+          const [],
       date: DateTime.parse(json['date'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
@@ -70,6 +79,7 @@ class Transaction {
       'type': type.index,
       'amount': amount,
       'note': note,
+      'attachments': attachments,
       'date': date.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
     };
