@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
@@ -10,29 +13,139 @@ import '../../config/constants.dart';
 /// Implemented by: Trần Quang Quân
 class AddTransactionSheet extends StatefulWidget {
   final VoidCallback? onTransactionAdded;
+  final TransactionType initialType;
+  final bool lockTransactionType;
 
-  const AddTransactionSheet({Key? key, this.onTransactionAdded})
-    : super(key: key);
+  const AddTransactionSheet({
+    Key? key,
+    this.onTransactionAdded,
+    this.initialType = TransactionType.expense,
+    this.lockTransactionType = false,
+  }) : super(key: key);
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
 }
 
+class _AttachmentItem {
+  final String value;
+  final String displayName;
+  final int sizeBytes;
+
+  const _AttachmentItem({
+    required this.value,
+    required this.displayName,
+    required this.sizeBytes,
+  });
+}
+
+class _AttachmentMeta {
+  final String name;
+  final bool isImage;
+  final Uint8List? imageBytes;
+
+  const _AttachmentMeta({
+    required this.name,
+    required this.isImage,
+    this.imageBytes,
+  });
+}
+
 class _AddTransactionSheetState extends State<AddTransactionSheet> {
+  static const Map<String, List<String>> _expenseCategoryOptions = {
+    'cat1': [
+      'Tiền thuê nhà/ Trả góp mua nhà',
+      'Điện, nước, internet, truyền hình',
+      'Phí bảo hiểm (y tế, xe, nhà)',
+      'Học phí/ Phí dịch vụ định kỳ',
+      'Thẻ tín dụng',
+      'Khác',
+    ],
+    'cat2': [
+      'Thực phẩm, nhu yếu phẩm',
+      'Xăng xe, vé xe buýt...',
+      'Quần áo cơ bản, giày dép',
+      'Khám sức khỏe định kỳ',
+      'Dụng cụ sinh hoạt',
+      'Khác',
+    ],
+    'cat3': [
+      'Quà tặng cho bạn bè/người thân',
+      'Tiệc cưới, sinh nhật, lễ hội',
+      'Sửa chữa đồ dùng hỏng hóc',
+      'Đóng góp xã hội, từ thiện',
+      'Khác',
+    ],
+    'cat4': [
+      'Chi phí y tế khẩn cấp',
+      'Hỗ trợ tài chính cho người thân',
+      'Thiên tai hoặc sự cố bất khả kháng',
+      'Khác',
+    ],
+    'cat5': [
+      'Ăn uống ngoài, cà phê',
+      'Du lịch, nghỉ dưỡng',
+      'Mua sắm',
+      'Giải trí: xem phim, concert, thể thao...',
+      'Sở thích cá nhân',
+      'Khác',
+    ],
+  };
+
   late TransactionType _transactionType;
   late TextEditingController _amountController;
   late TextEditingController _noteController;
+  late TextEditingController _otherExpenseController;
   DateTime? _selectedDate;
   String? _selectedWalletId;
   String? _selectedCategoryId;
+  String? _selectedExpenseOption;
+  String? _expandedExpenseGroupId;
+  final List<_AttachmentItem> _attachments = [];
+  bool _isPickingAttachment = false;
   bool _isLoading = false;
+
+  bool get _isOtherExpenseSelected =>
+      _transactionType == TransactionType.expense &&
+      _selectedExpenseOption == 'Khác';
+
+  _AttachmentMeta _parseAttachmentMeta(_AttachmentItem attachment) {
+    try {
+      final json = jsonDecode(attachment.value);
+      if (json is Map<String, dynamic>) {
+        final name = (json['name'] as String?) ?? attachment.displayName;
+        final ext = ((json['ext'] as String?) ?? '').toLowerCase();
+        final data = json['data'] as String?;
+        final isImage =
+            ext == 'png' ||
+            ext == 'jpg' ||
+            ext == 'jpeg' ||
+            ext == 'gif' ||
+            ext == 'webp' ||
+            ext == 'bmp';
+
+        if (isImage && data != null && data.isNotEmpty) {
+          return _AttachmentMeta(
+            name: name,
+            isImage: true,
+            imageBytes: base64Decode(data),
+          );
+        }
+
+        return _AttachmentMeta(name: name, isImage: isImage);
+      }
+    } catch (_) {}
+
+    return _AttachmentMeta(name: attachment.displayName, isImage: false);
+  }
 
   @override
   void initState() {
     super.initState();
-    _transactionType = TransactionType.expense;
+    _transactionType = widget.initialType;
     _amountController = TextEditingController();
     _noteController = TextEditingController();
+    _otherExpenseController = TextEditingController();
     _selectedDate = DateTime.now();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -54,6 +167,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _otherExpenseController.dispose();
     super.dispose();
   }
 
@@ -125,6 +239,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   Widget _buildTypeSelector() {
+    if (widget.lockTransactionType) {
+      final isIncome = _transactionType == TransactionType.income;
+      return _buildTypeButton(
+        isIncome ? 'Thu nhập' : 'Chi tiêu',
+        _transactionType,
+        isIncome ? Colors.green : Colors.red,
+      );
+    }
+
     return Row(
       children: [
         Expanded(
@@ -150,12 +273,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final isSelected = _transactionType == type;
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _transactionType = type;
-          _selectedCategoryId = null; // Reset category when type changes
-        });
-      },
+      onTap: widget.lockTransactionType
+          ? null
+          : () {
+              setState(() {
+                _transactionType = type;
+                _selectedCategoryId = null; // Reset category when type changes
+                if (type == TransactionType.income) {
+                  _selectedExpenseOption = null;
+                  _expandedExpenseGroupId = null;
+                  _otherExpenseController.clear();
+                }
+              });
+            },
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
@@ -169,7 +299,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           child: Text(
             label,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: isSelected ? color : null,
+              color: isSelected ? color : color.withOpacity(0.85),
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
             ),
           ),
@@ -225,26 +355,34 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           Wrap(
             spacing: AppSpacing.md,
             runSpacing: AppSpacing.md,
-            children: [
-              _buildQuickAmountChip(currentAmount + 1000),
-              _buildQuickAmountChip(currentAmount + 2000),
-              _buildQuickAmountChip(currentAmount + 3000),
-              _buildQuickAmountChip(currentAmount + 4000),
-            ],
+            children: _buildZeroExpandedSuggestions(
+              currentAmount,
+            ).map(_buildQuickAmountChip).toList(),
           ),
       ],
     );
   }
 
+  List<int> _buildZeroExpandedSuggestions(int baseAmount) {
+    final multipliers = [10, 100, 1000, 10000, 100000];
+    final suggestions = <int>{};
+
+    for (final multiplier in multipliers) {
+      suggestions.add(baseAmount * multiplier);
+    }
+
+    return suggestions.toList()..sort();
+  }
+
   Widget _buildQuickAmountChip(int amount) {
     return FilterChip(
       label: Text(
-        '+${AppCurrency.format(amount.toDouble())}',
+        AppCurrency.format(amount.toDouble()),
         style: const TextStyle(fontSize: 12),
       ),
       onSelected: (_) {
         setState(() {
-          _amountController.text = amount.toString();
+          _amountController.text = _formatAmount(amount.toString());
         });
       },
       backgroundColor: _transactionType == TransactionType.income
@@ -254,20 +392,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   Widget _buildCategorySelection() {
+    if (_transactionType == TransactionType.expense) {
+      return _buildExpenseCategorySelection();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Danh mục', style: Theme.of(context).textTheme.titleMedium),
-            TextButton.icon(
-              onPressed: _showAddCategoryDialog,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Thêm mới'),
-            ),
-          ],
-        ),
+        Text('Danh mục', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.md),
         Consumer<CategoryNotifier>(
           builder: (context, categoryNotifier, _) {
@@ -337,6 +469,116 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     );
   }
 
+  Widget _buildExpenseCategorySelection() {
+    return Consumer<CategoryNotifier>(
+      builder: (context, categoryNotifier, _) {
+        final categories = categoryNotifier
+            .getCategoriesByType(TransactionType.expense)
+            .where(
+              (category) => _expenseCategoryOptions.containsKey(category.id),
+            )
+            .toList();
+
+        if (categories.isEmpty) {
+          return Text(
+            'Không có danh mục cho loại ${_transactionType.label}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          );
+        }
+
+        final selectedCategory = categories.where(
+          (c) => c.id == _selectedCategoryId,
+        );
+        if (_selectedCategoryId == null || selectedCategory.isEmpty) {
+          final firstCategoryId = categories.first.id;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedCategoryId = firstCategoryId;
+              _selectedExpenseOption =
+                  _expenseCategoryOptions[firstCategoryId]?.first;
+            });
+          });
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Danh mục', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                ),
+                borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              ),
+              child: Column(
+                children: categories.map((category) {
+                  final isExpanded = _expandedExpenseGroupId == category.id;
+                  final isSelected = _selectedCategoryId == category.id;
+                  final options =
+                      _expenseCategoryOptions[category.id] ?? const <String>[];
+
+                  return ExpansionTile(
+                    initiallyExpanded: isExpanded,
+                    leading: Text(
+                      category.icon,
+                      style: const TextStyle(fontSize: 20),
+                    ),
+                    title: Text(category.name),
+                    tilePadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    onExpansionChanged: (expanded) {
+                      setState(() {
+                        _expandedExpenseGroupId = expanded ? category.id : null;
+                      });
+                    },
+                    children: options.map((option) {
+                      final optionSelected =
+                          isSelected && _selectedExpenseOption == option;
+                      return ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                        ),
+                        title: Text(option),
+                        trailing: optionSelected
+                            ? Icon(
+                                Icons.check_circle,
+                                color: Theme.of(context).primaryColor,
+                                size: 18,
+                              )
+                            : null,
+                        onTap: () async {
+                          if (option == 'Khác') {
+                            final confirmed = await _promptOtherExpenseDetail();
+                            if (!confirmed || !mounted) return;
+                          }
+
+                          setState(() {
+                            _selectedCategoryId = category.id;
+                            _selectedExpenseOption = option;
+                            _expandedExpenseGroupId = null;
+                            if (option != 'Khác') {
+                              _otherExpenseController.clear();
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildWalletSelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,16 +611,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   items: wallets.map<DropdownMenuItem<String>>((wallet) {
                     return DropdownMenuItem<String>(
                       value: wallet.id,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(child: Text(wallet.name)),
-                          Text(
-                            AppCurrency.format(wallet.balance),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
+                      child: Text(wallet.name),
                     );
                   }).toList(),
                   onChanged: (value) {
@@ -439,9 +672,33 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Ghi chú (tuỳ chọn)',
-          style: Theme.of(context).textTheme.titleMedium,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Ghi chú (tuỳ chọn)',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              children: [
+                TextButton.icon(
+                  onPressed: _isPickingAttachment
+                      ? null
+                      : () => _pickAttachments(imageOnly: true),
+                  icon: const Icon(Icons.image_outlined, size: 18),
+                  label: const Text('Ảnh'),
+                ),
+                TextButton.icon(
+                  onPressed: _isPickingAttachment
+                      ? null
+                      : () => _pickAttachments(imageOnly: false),
+                  icon: const Icon(Icons.attach_file, size: 18),
+                  label: const Text('Tệp'),
+                ),
+              ],
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.md),
         TextFormField(
@@ -454,8 +711,203 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             ),
           ),
         ),
+        if (_attachments.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: _attachments.map((attachment) {
+              final meta = _parseAttachmentMeta(attachment);
+              return InputChip(
+                avatar: meta.isImage && meta.imageBytes != null
+                    ? CircleAvatar(
+                        backgroundImage: MemoryImage(meta.imageBytes!),
+                      )
+                    : Icon(
+                        meta.isImage
+                            ? Icons.image_outlined
+                            : Icons.insert_drive_file_outlined,
+                        size: 18,
+                      ),
+                label: Text(meta.name),
+                onDeleted: () {
+                  setState(() {
+                    _attachments.removeWhere(
+                      (item) => item.value == attachment.value,
+                    );
+                  });
+                },
+              );
+            }).toList(),
+          ),
+        ],
       ],
     );
+  }
+
+  Future<void> _pickAttachments({required bool imageOnly}) async {
+    if (_isPickingAttachment) return;
+
+    setState(() => _isPickingAttachment = true);
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: true,
+        type: imageOnly ? FileType.image : FileType.any,
+      );
+
+      if (!mounted) return;
+
+      if (result == null || result.files.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Bạn chưa chọn tệp nào')));
+        return;
+      }
+
+      int addedCount = 0;
+      final failedFiles = <String>[];
+
+      setState(() {
+        for (final file in result.files) {
+          final bytes = file.bytes;
+          if (bytes == null || bytes.isEmpty) {
+            failedFiles.add(file.name);
+            continue;
+          }
+
+          if (_attachments.any(
+            (item) =>
+                item.displayName == file.name && item.sizeBytes == bytes.length,
+          )) {
+            continue;
+          }
+
+          final payload = jsonEncode({
+            'name': file.name,
+            'size': bytes.length,
+            'ext': file.extension,
+            'data': base64Encode(bytes),
+          });
+
+          _attachments.add(
+            _AttachmentItem(
+              value: payload,
+              displayName: file.name,
+              sizeBytes: bytes.length,
+            ),
+          );
+          addedCount++;
+        }
+      });
+
+      if (addedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã tải lên $addedCount tệp đính kèm')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không có tệp mới để tải lên hoặc tệp không hợp lệ'),
+          ),
+        );
+      }
+
+      if (failedFiles.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể tải lên: ${failedFiles.join(', ')}'),
+          ),
+        );
+      }
+    } on PlatformException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể mở trình chọn tệp, vui lòng thử lại'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Có lỗi khi chọn tệp đính kèm')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingAttachment = false);
+      }
+    }
+  }
+
+  Widget _buildExpenseOtherInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Thông tin chi tiêu khác',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextFormField(
+          controller: _otherExpenseController,
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Nhập nội dung chi tiêu khác...',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<bool> _promptOtherExpenseDetail() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Nhập thông tin chi tiêu khác'),
+          content: TextField(
+            controller: _otherExpenseController,
+            autofocus: true,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Ví dụ: Mua đồ gia dụng phát sinh',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final value = _otherExpenseController.text.trim();
+                if (value.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Vui lòng nhập thông tin chi tiêu'),
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) {
+      return false;
+    }
+
+    _otherExpenseController.text = result.trim();
+    return true;
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -493,10 +945,42 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       return;
     }
 
+    if (_transactionType == TransactionType.expense &&
+        (_selectedExpenseOption == null || _selectedExpenseOption!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng chọn chi tiết danh mục chi tiêu'),
+        ),
+      );
+      return;
+    }
+
+    if (_isOtherExpenseSelected &&
+        _otherExpenseController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập thông tin chi tiêu')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final amount = double.parse(_amountController.text);
+      final normalizedAmountText = _amountController.text.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
+      final amount = double.tryParse(normalizedAmountText);
+
+      if (amount == null || amount <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Số tiền không hợp lệ')));
+        }
+        return;
+      }
+
       final transaction = Transaction(
         id: const Uuid().v4(),
         userId: 'user1',
@@ -504,7 +988,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         categoryId: _selectedCategoryId!,
         type: _transactionType,
         amount: amount,
-        note: _noteController.text,
+        note: _buildTransactionNote(),
+        attachments: _attachments.map((item) => item.value).toList(),
         date: _selectedDate ?? DateTime.now(),
         createdAt: DateTime.now(),
       );
@@ -535,6 +1020,29 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  String _buildTransactionNote() {
+    final rawNote = _noteController.text.trim();
+    final otherExpenseDetail = _otherExpenseController.text.trim();
+    if (_transactionType != TransactionType.expense ||
+        _selectedExpenseOption == null ||
+        _selectedExpenseOption!.isEmpty) {
+      return rawNote;
+    }
+
+    if (_selectedExpenseOption == 'Khác') {
+      if (rawNote.isEmpty) {
+        return 'Khác - $otherExpenseDetail';
+      }
+      return 'Khác - $otherExpenseDetail - $rawNote';
+    }
+
+    if (rawNote.isEmpty) {
+      return _selectedExpenseOption!;
+    }
+
+    return '${_selectedExpenseOption!} - $rawNote';
   }
 
   void _showAddCategoryDialog() {

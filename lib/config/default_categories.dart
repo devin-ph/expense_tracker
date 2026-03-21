@@ -17,14 +17,23 @@ const Map<String, IconData> defaultCategoryIcons = {
 
 // Default categories
 final List<Map<String, dynamic>> defaultExpenseCategories = [
-  {'name': 'Ăn uống', 'icon': Icons.restaurant, 'color': Colors.orange},
-  {'name': 'Đi lại', 'icon': Icons.directions_car, 'color': Colors.blue},
-  {'name': 'Mua sắm', 'icon': Icons.shopping_bag, 'color': Colors.pink},
-  {'name': 'Giải trí', 'icon': Icons.movie, 'color': Colors.purple},
-  {'name': 'Sức khỏe', 'icon': Icons.health_and_safety, 'color': Colors.red},
-  {'name': 'Giáo dục', 'icon': Icons.school, 'color': Colors.green},
-  {'name': 'Tiện ích', 'icon': Icons.water, 'color': Colors.cyan},
-  {'name': 'Khác', 'icon': Icons.category, 'color': Colors.grey},
+  {'name': 'Chi tiêu cố định', 'icon': Icons.home_work, 'color': Colors.indigo},
+  {
+    'name': 'Chi tiêu thiết yếu',
+    'icon': Icons.shopping_basket,
+    'color': Colors.teal,
+  },
+  {
+    'name': 'Chi tiêu phát sinh',
+    'icon': Icons.celebration,
+    'color': Colors.amber,
+  },
+  {'name': 'Chi tiêu khẩn cấp', 'icon': Icons.emergency, 'color': Colors.red},
+  {
+    'name': 'Chi tiêu tùy ý',
+    'icon': Icons.emoji_emotions,
+    'color': Colors.deepPurple,
+  },
 ];
 
 final List<Map<String, dynamic>> defaultIncomeCategories = [

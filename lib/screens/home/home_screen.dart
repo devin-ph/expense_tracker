@@ -909,6 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       categoryIcon: category.icon,
                       amount: transaction.amount,
                       note: transaction.note,
+                      attachments: transaction.attachments,
                       dateTime: transaction.date,
                       isIncome: transaction.type == TransactionType.income,
                     );

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../config/constants.dart';
@@ -8,6 +10,7 @@ class TransactionCard extends StatelessWidget {
   final String categoryIcon;
   final double amount;
   final String? note;
+  final List<String> attachments;
   final DateTime dateTime;
   final bool isIncome;
   final VoidCallback? onTap;
@@ -19,11 +22,38 @@ class TransactionCard extends StatelessWidget {
     required this.categoryIcon,
     required this.amount,
     this.note,
+    this.attachments = const [],
     required this.dateTime,
     this.isIncome = false,
     this.onTap,
     this.onLongPress,
   }) : super(key: key);
+
+  String _attachmentName(String payload) {
+    try {
+      final json = jsonDecode(payload);
+      if (json is Map<String, dynamic>) {
+        return (json['name'] as String?) ?? 'Tệp đính kèm';
+      }
+    } catch (_) {}
+    return payload;
+  }
+
+  bool _isImageAttachment(String payload) {
+    try {
+      final json = jsonDecode(payload);
+      if (json is Map<String, dynamic>) {
+        final ext = ((json['ext'] as String?) ?? '').toLowerCase();
+        return ext == 'png' ||
+            ext == 'jpg' ||
+            ext == 'jpeg' ||
+            ext == 'gif' ||
+            ext == 'webp' ||
+            ext == 'bmp';
+      }
+    } catch (_) {}
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +106,57 @@ class TransactionCard extends StatelessWidget {
                           style: textTheme.bodySmall,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    if (attachments.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.xs),
+                        child: Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: AppSpacing.xs,
+                          children: attachments.take(2).map((item) {
+                            final isImage = _isImageAttachment(item);
+                            final name = _attachmentName(item);
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.primaryColor.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(
+                                  AppBorderRadius.sm,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isImage
+                                        ? Icons.image_outlined
+                                        : Icons.attach_file,
+                                    size: 12,
+                                    color: theme.primaryColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    name,
+                                    style: textTheme.labelSmall,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    if (attachments.length > 2)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '+${attachments.length - 2} tệp đính kèm',
+                          style: textTheme.labelSmall,
                         ),
                       ),
                     Padding(
