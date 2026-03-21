@@ -93,9 +93,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   };
 
   late TransactionType _transactionType;
+  final _formKey = GlobalKey<FormState>();
   late TextEditingController _amountController;
   late TextEditingController _noteController;
   late TextEditingController _otherExpenseController;
+  late FocusNode _amountFocusNode;
   DateTime? _selectedDate;
   String? _selectedWalletId;
   String? _selectedCategoryId;
@@ -104,6 +106,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final List<_AttachmentItem> _attachments = [];
   bool _isPickingAttachment = false;
   bool _isLoading = false;
+  bool _showValidationErrors = false;
 
   bool get _isOtherExpenseSelected =>
       _transactionType == TransactionType.expense &&
@@ -146,19 +149,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _amountController = TextEditingController();
     _noteController = TextEditingController();
     _otherExpenseController = TextEditingController();
+    _amountFocusNode = FocusNode();
     _selectedDate = DateTime.now();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final selectedWallet = context.read<WalletNotifier>().selectedWallet;
       if (selectedWallet != null) {
         setState(() => _selectedWalletId = selectedWallet.id);
-      }
-
-      // Initialize selected category to first available category
-      final categoryNotifier = context.read<CategoryNotifier>();
-      final categories = categoryNotifier.getCategoriesByType(_transactionType);
-      if (categories.isNotEmpty && _selectedCategoryId == null) {
-        setState(() => _selectedCategoryId = categories.first.id);
       }
     });
   }
@@ -168,6 +165,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _amountController.dispose();
     _noteController.dispose();
     _otherExpenseController.dispose();
+    _amountFocusNode.dispose();
     super.dispose();
   }
 
@@ -181,10 +179,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           top: AppSpacing.lg,
           bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: Form(
+          key: _formKey,
+          autovalidateMode: _showValidationErrors
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -232,7 +235,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     : const Text('Thêm giao dịch'),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -279,11 +283,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               setState(() {
                 _transactionType = type;
                 _selectedCategoryId = null; // Reset category when type changes
-                if (type == TransactionType.income) {
-                  _selectedExpenseOption = null;
-                  _expandedExpenseGroupId = null;
-                  _otherExpenseController.clear();
-                }
+                _selectedExpenseOption = null;
+                _expandedExpenseGroupId = null;
+                _otherExpenseController.clear();
               });
             },
       child: Container(
@@ -312,6 +314,23 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final currentAmount =
         int.tryParse(_amountController.text.replaceAll(RegExp(r'[^\d]'), '')) ??
         0;
+    final walletNotifier = context.watch<WalletNotifier>();
+    double? selectedWalletBalance;
+    for (final wallet in walletNotifier.wallets) {
+      if (wallet.id == _selectedWalletId) {
+        selectedWalletBalance = wallet.balance;
+        break;
+      }
+    }
+    final suggestionLimit = _transactionType == TransactionType.expense
+        ? selectedWalletBalance?.floor()
+        : null;
+    final suggestions = currentAmount > 0
+        ? _buildZeroExpandedSuggestions(
+            currentAmount,
+            maxAmount: suggestionLimit,
+          )
+        : const <int>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,6 +339,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: _amountController,
+          focusNode: _amountFocusNode,
           keyboardType: TextInputType.number,
           style: Theme.of(context).textTheme.headlineSmall,
           textAlign: TextAlign.center,
@@ -334,6 +354,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               borderRadius: BorderRadius.circular(AppBorderRadius.lg),
             ),
           ),
+          validator: _validateAmountField,
           onChanged: (value) {
             if (value.isNotEmpty) {
               final numericValue = value.replaceAll(RegExp(r'[^\d]'), '');
@@ -351,24 +372,25 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         ),
         const SizedBox(height: AppSpacing.md),
         // Quick amount suggestions (pills)
-        if (currentAmount > 0)
+        if (suggestions.isNotEmpty)
           Wrap(
             spacing: AppSpacing.md,
             runSpacing: AppSpacing.md,
-            children: _buildZeroExpandedSuggestions(
-              currentAmount,
-            ).map(_buildQuickAmountChip).toList(),
+            children: suggestions.map(_buildQuickAmountChip).toList(),
           ),
       ],
     );
   }
 
-  List<int> _buildZeroExpandedSuggestions(int baseAmount) {
+  List<int> _buildZeroExpandedSuggestions(int baseAmount, {int? maxAmount}) {
     final multipliers = [10, 100, 1000, 10000, 100000];
     final suggestions = <int>{};
 
     for (final multiplier in multipliers) {
-      suggestions.add(baseAmount * multiplier);
+      final amount = baseAmount * multiplier;
+      if (maxAmount == null || amount <= maxAmount) {
+        suggestions.add(amount);
+      }
     }
 
     return suggestions.toList()..sort();
@@ -418,13 +440,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             final currentCategoryValid = categories.any(
               (c) => c.id == _selectedCategoryId,
             );
-            final effectiveValue = currentCategoryValid
-                ? _selectedCategoryId
-                : categories.first.id;
+            final effectiveValue = currentCategoryValid ? _selectedCategoryId : null;
 
-            if (effectiveValue != _selectedCategoryId) {
+            if (!currentCategoryValid && _selectedCategoryId != null) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                setState(() => _selectedCategoryId = effectiveValue);
+                if (!mounted) return;
+                setState(() => _selectedCategoryId = null);
               });
             }
 
@@ -432,7 +453,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  color: _showValidationErrors && _hasCategoryError
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).primaryColor.withOpacity(0.3),
                 ),
                 borderRadius: BorderRadius.circular(AppBorderRadius.lg),
               ),
@@ -440,6 +463,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: effectiveValue,
+                  hint: const Text('Chọn danh mục'),
                   items: categories.map<DropdownMenuItem<String>>((category) {
                     return DropdownMenuItem<String>(
                       value: category.id,
@@ -465,6 +489,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             );
           },
         ),
+        if (_showValidationErrors && _hasCategoryError)
+          _buildValidationErrorText('Vui lòng chọn danh mục'),
       ],
     );
   }
@@ -486,17 +512,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           );
         }
 
-        final selectedCategory = categories.where(
-          (c) => c.id == _selectedCategoryId,
-        );
-        if (_selectedCategoryId == null || selectedCategory.isEmpty) {
-          final firstCategoryId = categories.first.id;
+        final hasSelectedCategory = categories.any((c) => c.id == _selectedCategoryId);
+        if (_selectedCategoryId != null && !hasSelectedCategory) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             setState(() {
-              _selectedCategoryId = firstCategoryId;
-              _selectedExpenseOption =
-                  _expenseCategoryOptions[firstCategoryId]?.first;
+              _selectedCategoryId = null;
+              _selectedExpenseOption = null;
+              _expandedExpenseGroupId = null;
             });
           });
         }
@@ -509,7 +532,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  color: _showValidationErrors &&
+                          (_hasCategoryError || _hasExpenseOptionError)
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).primaryColor.withOpacity(0.3),
                 ),
                 borderRadius: BorderRadius.circular(AppBorderRadius.lg),
               ),
@@ -573,6 +599,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 }).toList(),
               ),
             ),
+            if (_showValidationErrors && (_hasCategoryError || _hasExpenseOptionError))
+              _buildValidationErrorText('Vui lòng chọn chi tiết danh mục chi tiêu'),
           ],
         );
       },
@@ -600,7 +628,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  color: _showValidationErrors && _hasWalletError
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).primaryColor.withOpacity(0.3),
                 ),
                 borderRadius: BorderRadius.circular(AppBorderRadius.lg),
               ),
@@ -608,6 +638,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: _selectedWalletId,
+                  hint: const Text('Chọn ví'),
                   items: wallets.map<DropdownMenuItem<String>>((wallet) {
                     return DropdownMenuItem<String>(
                       value: wallet.id,
@@ -624,6 +655,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             );
           },
         ),
+        if (_showValidationErrors && _hasWalletError)
+          _buildValidationErrorText('Vui lòng chọn ví'),
       ],
     );
   }
@@ -643,7 +676,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             ),
             decoration: BoxDecoration(
               border: Border.all(
-                color: Theme.of(context).primaryColor.withOpacity(0.3),
+                color: _showValidationErrors && _hasDateError
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).primaryColor.withOpacity(0.3),
               ),
               borderRadius: BorderRadius.circular(AppBorderRadius.lg),
             ),
@@ -664,6 +699,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             ),
           ),
         ),
+        if (_showValidationErrors && _hasDateError)
+          _buildValidationErrorText('Vui lòng chọn ngày giao dịch'),
       ],
     );
   }
@@ -923,42 +960,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   void _addTransaction() async {
-    // Validation
-    if (_amountController.text.isEmpty) {
+    setState(() => _showValidationErrors = true);
+
+    final isValidAmount = _formKey.currentState?.validate() ?? false;
+    final validationMessage = _validateForm();
+    if (!isValidAmount || validationMessage != null) {
+      await _focusFirstInvalidField();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Vui lòng nhập số tiền')));
-      return;
-    }
-
-    if (_selectedCategoryId == null || _selectedCategoryId == 'add_new') {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Vui lòng chọn danh mục')));
-      return;
-    }
-
-    if (_selectedWalletId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Vui lòng chọn ví')));
-      return;
-    }
-
-    if (_transactionType == TransactionType.expense &&
-        (_selectedExpenseOption == null || _selectedExpenseOption!.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vui lòng chọn chi tiết danh mục chi tiêu'),
-        ),
-      );
-      return;
-    }
-
-    if (_isOtherExpenseSelected &&
-        _otherExpenseController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập thông tin chi tiêu')),
+      ).showSnackBar(
+        SnackBar(content: Text(validationMessage ?? 'Vui lòng kiểm tra dữ liệu nhập')),
       );
       return;
     }
@@ -1020,6 +1031,101 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _focusFirstInvalidField() async {
+    if (_hasAmountError) {
+      _amountFocusNode.requestFocus();
+      return;
+    }
+
+    if (_hasOtherExpenseError) {
+      await _promptOtherExpenseDetail();
+    }
+  }
+
+  bool get _hasAmountError {
+    final normalizedAmountText = _amountController.text.replaceAll(
+      RegExp(r'[^\d]'),
+      '',
+    );
+    if (normalizedAmountText.isEmpty) {
+      return true;
+    }
+
+    final amount = double.tryParse(normalizedAmountText);
+    return amount == null || amount <= 0;
+  }
+
+  bool get _hasCategoryError =>
+      _selectedCategoryId == null || _selectedCategoryId == 'add_new';
+
+  bool get _hasWalletError => _selectedWalletId == null;
+
+  bool get _hasDateError => _selectedDate == null;
+
+  bool get _hasExpenseOptionError =>
+      _transactionType == TransactionType.expense &&
+      (_selectedExpenseOption == null || _selectedExpenseOption!.trim().isEmpty);
+
+  bool get _hasOtherExpenseError =>
+      _isOtherExpenseSelected && _otherExpenseController.text.trim().isEmpty;
+
+  String? _validateAmountField(String? _) {
+    final normalizedAmountText = _amountController.text.replaceAll(
+      RegExp(r'[^\d]'),
+      '',
+    );
+    if (normalizedAmountText.isEmpty) {
+      return 'Vui lòng nhập số tiền';
+    }
+
+    final amount = double.tryParse(normalizedAmountText);
+    if (amount == null || amount <= 0) {
+      return 'Số tiền không hợp lệ';
+    }
+
+    return null;
+  }
+
+  Widget _buildValidationErrorText(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Text(
+        message,
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error),
+      ),
+    );
+  }
+
+  String? _validateForm() {
+    if (_hasAmountError) {
+      return _validateAmountField(_amountController.text);
+    }
+
+    if (_hasCategoryError) {
+      return 'Vui lòng chọn danh mục';
+    }
+
+    if (_hasWalletError) {
+      return 'Vui lòng chọn ví';
+    }
+
+    if (_hasDateError) {
+      return 'Vui lòng chọn ngày giao dịch';
+    }
+
+    if (_hasExpenseOptionError) {
+      return 'Vui lòng chọn chi tiết danh mục chi tiêu';
+    }
+
+    if (_hasOtherExpenseError) {
+      return 'Vui lòng nhập thông tin chi tiêu';
+    }
+
+    return null;
   }
 
   String _buildTransactionNote() {
