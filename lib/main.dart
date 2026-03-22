@@ -59,6 +59,7 @@ class MyApp extends StatelessWidget {
               '/transactions': (_) => const TransactionsScreen(),
               '/statistics': (_) => const StatisticsScreen(),
               '/login': (_) => const AuthLoginScreen(),
+              '/signup': (_) => const AuthSignupScreen(),
               '/profile': (_) => const ProfileScreen(),
             },
           );
@@ -93,8 +94,13 @@ class _MainAppState extends State<MainApp> {
   Widget build(BuildContext context) {
     return Consumer<AuthNotifier>(
       builder: (context, authNotifier, _) {
-        // If not authenticated, show login screen
-        if (!authNotifier.isAuthenticated && !authNotifier.isLoading) {
+        if (!authNotifier.isAuthenticated) {
+          if (authNotifier.isLoading) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
           return const AuthLoginScreen();
         }
 

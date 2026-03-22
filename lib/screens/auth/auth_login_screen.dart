@@ -79,7 +79,7 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     hintText: 'Nhập email',
-                    prefixIcon: const Icon(Icons.email_outlined),
+                    prefixIcon: const Icon(Icons.alternate_email_rounded),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -94,7 +94,7 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
                   obscureText: !_isPasswordVisible,
                   decoration: InputDecoration(
                     hintText: 'Nhập mật khẩu',
-                    prefixIcon: const Icon(Icons.lock_outlined),
+                    prefixIcon: const Icon(Icons.password_rounded),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordVisible
@@ -143,7 +143,7 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
                 // Google login
                 OutlinedButton.icon(
                   onPressed: _isLoading ? null : _handleGoogleLogin,
-                  icon: const Text('🔍', style: TextStyle(fontSize: 20)),
+                  icon: const Icon(Icons.g_mobiledata, size: 28),
                   label: const Text('Tiếp tục với Google'),
                 ),
                 const SizedBox(height: AppSpacing.xl),
@@ -181,11 +181,9 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await context.read<AuthNotifier>().login(
-        _emailController.text,
-        _passwordController.text,
-      );
-      if (mounted) {
+      final authNotifier = context.read<AuthNotifier>();
+      await authNotifier.login(_emailController.text, _passwordController.text);
+      if (mounted && authNotifier.isAuthenticated) {
         Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
@@ -195,7 +193,9 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -203,8 +203,9 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await context.read<AuthNotifier>().loginWithGoogle();
-      if (mounted) {
+      final authNotifier = context.read<AuthNotifier>();
+      await authNotifier.loginWithGoogle();
+      if (mounted && authNotifier.isAuthenticated) {
         Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
@@ -214,7 +215,9 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 }

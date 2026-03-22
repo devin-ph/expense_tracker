@@ -92,18 +92,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     ],
   };
   static const Map<String, List<String>> _incomeCategoryOptions = {
-    'cat_income': [
-      'Lương tháng',
-      'Lương làm thêm',
-      'Phụ cấp',
-      'Khác',
-    ],
-    'cat_bonus': [
-      'Thưởng hiệu suất',
-      'Thưởng lễ/tết',
-      'Hoa hồng',
-      'Khác',
-    ],
+    'cat_income': ['Lương tháng', 'Lương làm thêm', 'Phụ cấp', 'Khác'],
+    'cat_bonus': ['Thưởng hiệu suất', 'Thưởng lễ/tết', 'Hoa hồng', 'Khác'],
   };
 
   late TransactionType _transactionType;
@@ -202,53 +192,53 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Thêm giao dịch',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            // Transaction type tabs
-            _buildTypeSelector(),
-            const SizedBox(height: AppSpacing.lg),
-            // Amount input
-            _buildAmountInput(),
-            const SizedBox(height: AppSpacing.lg),
-            // Category selection
-            _buildCategorySelection(),
-            const SizedBox(height: AppSpacing.lg),
-            // Wallet selection
-            _buildWalletSelection(),
-            const SizedBox(height: AppSpacing.lg),
-            // Date selection
-            _buildDateSelection(),
-            const SizedBox(height: AppSpacing.lg),
-            // Note input
-            _buildNoteInput(),
-            const SizedBox(height: AppSpacing.xl),
-            // Add button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _addTransaction,
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Thêm giao dịch'),
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Thêm giao dịch',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
-            ),
+              const SizedBox(height: AppSpacing.lg),
+              // Transaction type tabs
+              _buildTypeSelector(),
+              const SizedBox(height: AppSpacing.lg),
+              // Amount input
+              _buildAmountInput(),
+              const SizedBox(height: AppSpacing.lg),
+              // Category selection
+              _buildCategorySelection(),
+              const SizedBox(height: AppSpacing.lg),
+              // Wallet selection
+              _buildWalletSelection(),
+              const SizedBox(height: AppSpacing.lg),
+              // Date selection
+              _buildDateSelection(),
+              const SizedBox(height: AppSpacing.lg),
+              // Note input
+              _buildNoteInput(),
+              const SizedBox(height: AppSpacing.xl),
+              // Add button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _addTransaction,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Thêm giao dịch'),
+                ),
+              ),
             ],
           ),
         ),
@@ -340,18 +330,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         ? selectedWalletBalance?.floor()
         : null;
     final suggestionMin =
-      (_transactionType == TransactionType.income ||
-        _transactionType == TransactionType.expense)
-      ? 1000
-      : null;
+        (_transactionType == TransactionType.income ||
+            _transactionType == TransactionType.expense)
+        ? 1000
+        : null;
     final suggestionMax = _transactionType == TransactionType.income
-      ? 100000000
-      : suggestionLimit;
+        ? 100000000
+        : suggestionLimit;
     final suggestions = currentAmount > 0
         ? _buildZeroExpandedSuggestions(
             currentAmount,
-        minAmount: suggestionMin,
-        maxAmount: suggestionMax,
+            minAmount: suggestionMin,
+            maxAmount: suggestionMax,
           )
         : const <int>[];
 
@@ -414,7 +404,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     int? minAmount,
     int? maxAmount,
   }) {
-    final multipliers = [10,100,1000, 10000, 100000,1000000,10000000,100000000];
+    final multipliers = [
+      10,
+      100,
+      1000,
+      10000,
+      100000,
+      1000000,
+      10000000,
+      100000000,
+    ];
     final suggestions = <int>{};
 
     for (final multiplier in multipliers) {
@@ -472,7 +471,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           );
         }
 
-        final hasSelectedCategory = categories.any((c) => c.id == _selectedCategoryId);
+        final hasSelectedCategory = categories.any(
+          (c) => c.id == _selectedCategoryId,
+        );
         if (_selectedCategoryId != null && !hasSelectedCategory) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -486,12 +487,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         final selectedCategory = categories.where(
           (category) => category.id == _selectedCategoryId,
         );
-        final selectedCategoryId =
-            selectedCategory.isNotEmpty ? selectedCategory.first.id : null;
+        final selectedCategoryId = selectedCategory.isNotEmpty
+            ? selectedCategory.first.id
+            : null;
         final selectedOptions = selectedCategoryId != null
             ? (_incomeCategoryOptions[selectedCategoryId] ?? const <String>[])
             : const <String>[];
-        final hasSelectedOption = selectedOptions.contains(_selectedIncomeOption);
+        final hasSelectedOption = selectedOptions.contains(
+          _selectedIncomeOption,
+        );
 
         if (_selectedIncomeOption != null && !hasSelectedOption) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -527,7 +531,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       value: category.id,
                       child: Row(
                         children: [
-                          Text(category.icon, style: const TextStyle(fontSize: 20)),
+                          Text(
+                            category.icon,
+                            style: const TextStyle(fontSize: 20),
+                          ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(child: Text(category.name)),
                         ],
@@ -561,13 +568,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   isExpanded: true,
                   value: hasSelectedOption ? _selectedIncomeOption : null,
                   hint: const Text('Chọn chi tiết danh mục thu nhập'),
-                  items: selectedOptions.map<DropdownMenuItem<String>>((option) {
+                  items: selectedOptions.map<DropdownMenuItem<String>>((
+                    option,
+                  ) {
                     return DropdownMenuItem<String>(
                       value: option,
                       child: Text(option),
                     );
                   }).toList(),
-                  onChanged: selectedCategoryId == null || selectedOptions.isEmpty
+                  onChanged:
+                      selectedCategoryId == null || selectedOptions.isEmpty
                       ? null
                       : (value) {
                           if (value == null) return;
@@ -579,7 +589,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               ),
             ),
             if (_showValidationErrors && _hasIncomeOptionError)
-              _buildValidationErrorText('Vui lòng chọn chi tiết danh mục thu nhập'),
+              _buildValidationErrorText(
+                'Vui lòng chọn chi tiết danh mục thu nhập',
+              ),
           ],
         );
       },
@@ -603,7 +615,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           );
         }
 
-        final hasSelectedCategory = categories.any((c) => c.id == _selectedCategoryId);
+        final hasSelectedCategory = categories.any(
+          (c) => c.id == _selectedCategoryId,
+        );
         if (_selectedCategoryId != null && !hasSelectedCategory) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -617,12 +631,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         final selectedCategory = categories.where(
           (category) => category.id == _selectedCategoryId,
         );
-        final selectedCategoryId =
-            selectedCategory.isNotEmpty ? selectedCategory.first.id : null;
+        final selectedCategoryId = selectedCategory.isNotEmpty
+            ? selectedCategory.first.id
+            : null;
         final selectedOptions = selectedCategoryId != null
             ? (_expenseCategoryOptions[selectedCategoryId] ?? const <String>[])
             : const <String>[];
-        final hasSelectedOption = selectedOptions.contains(_selectedExpenseOption);
+        final hasSelectedOption = selectedOptions.contains(
+          _selectedExpenseOption,
+        );
 
         if (_selectedExpenseOption != null && !hasSelectedOption) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -659,7 +676,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       value: category.id,
                       child: Row(
                         children: [
-                          Text(category.icon, style: const TextStyle(fontSize: 20)),
+                          Text(
+                            category.icon,
+                            style: const TextStyle(fontSize: 20),
+                          ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(child: Text(category.name)),
                         ],
@@ -694,7 +714,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   isExpanded: true,
                   value: hasSelectedOption ? _selectedExpenseOption : null,
                   hint: const Text('Chọn chi tiết danh mục'),
-                  items: selectedOptions.map<DropdownMenuItem<String>>((option) {
+                  items: selectedOptions.map<DropdownMenuItem<String>>((
+                    option,
+                  ) {
                     return DropdownMenuItem<String>(
                       value: option,
                       child: Text(option),
@@ -720,7 +742,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               ),
             ),
             if (_showValidationErrors && _hasExpenseOptionError)
-              _buildValidationErrorText('Vui lòng chọn chi tiết danh mục chi tiêu'),
+              _buildValidationErrorText(
+                'Vui lòng chọn chi tiết danh mục chi tiêu',
+              ),
           ],
         );
       },
@@ -1086,10 +1110,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final validationMessage = _validateForm();
     if (!isValidAmount || validationMessage != null) {
       await _focusFirstInvalidField();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text(validationMessage ?? 'Vui lòng kiểm tra dữ liệu nhập')),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(validationMessage ?? 'Vui lòng kiểm tra dữ liệu nhập'),
+        ),
       );
       return;
     }
@@ -1187,19 +1211,23 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool get _hasExpenseOptionError =>
       _transactionType == TransactionType.expense &&
       _selectedCategoryId != null &&
-      (_selectedExpenseOption == null || _selectedExpenseOption!.trim().isEmpty);
+      (_selectedExpenseOption == null ||
+          _selectedExpenseOption!.trim().isEmpty);
 
   bool get _hasIncomeOptionError {
-    if (_transactionType != TransactionType.income || _selectedCategoryId == null) {
+    if (_transactionType != TransactionType.income ||
+        _selectedCategoryId == null) {
       return false;
     }
 
-    final options = _incomeCategoryOptions[_selectedCategoryId!] ?? const <String>[];
+    final options =
+        _incomeCategoryOptions[_selectedCategoryId!] ?? const <String>[];
     if (options.isEmpty) {
       return false;
     }
 
-    return _selectedIncomeOption == null || _selectedIncomeOption!.trim().isEmpty;
+    return _selectedIncomeOption == null ||
+        _selectedIncomeOption!.trim().isEmpty;
   }
 
   bool get _hasOtherExpenseError =>
@@ -1227,9 +1255,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       padding: const EdgeInsets.only(top: AppSpacing.sm),
       child: Text(
         message,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.error,
+        ),
       ),
     );
   }
@@ -1314,13 +1342,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       '💊',
       '🎮',
       '📚',
-      '✈️',
+      '✈',
       '🎬',
       '🎂',
       '👕',
       '💇',
-      '🏋️',
-      '💇‍♀️',
+      '💪',
+      '✂',
       '📱',
       '⚽',
       '🎸',

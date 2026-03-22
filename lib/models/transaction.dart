@@ -20,10 +20,12 @@ class Transaction {
     required this.type,
     required this.amount,
     this.note,
-    this.attachments = const [],
+    List<String>? attachments,
     required this.date,
     required this.createdAt,
-  });
+  }) : attachments = List<String>.unmodifiable(
+         (attachments ?? const <String>[]).map((item) => item.toString()),
+       );
 
   Transaction copyWith({
     String? id,
@@ -60,11 +62,11 @@ class Transaction {
       type: TransactionType.values[json['type'] as int],
       amount: (json['amount'] as num).toDouble(),
       note: json['note'] as String?,
-      attachments:
-          (json['attachments'] as List<dynamic>?)
-              ?.map((item) => item.toString())
-              .toList() ??
-          const [],
+      attachments: json['attachments'] is List
+          ? (json['attachments'] as List<dynamic>)
+                .map((item) => item.toString())
+                .toList()
+          : const <String>[],
       date: DateTime.parse(json['date'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );

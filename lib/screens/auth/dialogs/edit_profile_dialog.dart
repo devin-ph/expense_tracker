@@ -77,7 +77,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
               controller: _nameController,
               decoration: InputDecoration(
                 hintText: 'Nhập tên của bạn',
-                prefixIcon: const Icon(Icons.person_outline),
+                prefixIcon: const Icon(Icons.badge_outlined),
                 enabled: !_isLoading,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppBorderRadius.md),
