@@ -173,40 +173,51 @@ class _MainAppState extends State<MainApp> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _selectedIndex == index;
     final theme = Theme.of(context);
-
-    // Use accent color for selected items in dark mode for better contrast
-    final selectedColor = theme.brightness == Brightness.dark
-        ? const Color(0xFF06B6D4) // Cyan accent
-        : theme.primaryColor;
+    final selectedColor = primaryColor;
+    final unselectedColor = theme.brightness == Brightness.dark
+        ? const Color(0xFF9CA3AF)
+        : Colors.grey;
 
     return Expanded(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => setState(() => _selectedIndex = index),
-          splashColor: theme.primaryColor.withOpacity(0.1),
-          highlightColor: theme.primaryColor.withOpacity(0.05),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? selectedColor : Colors.grey,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: isSelected ? selectedColor : Colors.grey,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  fontSize: 10,
+          onTapDown: (_) {
+            if (_selectedIndex != index) {
+              setState(() => _selectedIndex = index);
+            }
+          },
+          onTap: () {},
+          splashFactory: InkSplash.splashFactory,
+          borderRadius: BorderRadius.circular(12),
+          splashColor: selectedColor.withValues(alpha: 0.2),
+          hoverColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? selectedColor : unselectedColor,
+                  size: 24,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isSelected ? selectedColor : unselectedColor,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: 10,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
       ),
