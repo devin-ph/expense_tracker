@@ -53,6 +53,12 @@ dependencies:
   # Image Picker
   image_picker: ^1.0.0
 
+  # File and image picker
+  file_picker: ^8.1.2
+
+  # HTTP client
+  http: ^1.2.2
+
   # Firebase
   firebase_core: ^2.24.0
   firebase_auth: ^4.14.0
@@ -78,6 +84,14 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: fonts/NotoSans-Regular.ttf
+    - family: NotoColorEmoji
+      fonts:
+        - asset: fonts/NotoColorEmoji.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -11,6 +11,7 @@ import 'screens/transactions/transactions_screen.dart';
 import 'screens/statistics/statistics_screen.dart';
 import 'screens/auth/index.dart';
 import 'screens/add_transaction/add_transaction_sheet.dart';
+import 'widgets/index.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +78,7 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
+  TransactionType _activeTransactionType = TransactionType.income;
 
   @override
   void initState() {
@@ -97,7 +99,16 @@ class _MainAppState extends State<MainApp> {
         }
 
         return Scaffold(
-          body: _buildBody(_selectedIndex),
+          body: Stack(
+            children: [
+              _buildBody(_selectedIndex),
+              const Positioned(
+                right: AppSpacing.lg,
+                bottom: 96,
+                child: FloatingChatOverlay(),
+              ),
+            ],
+          ),
           bottomNavigationBar: _buildBottomNavigationBar(),
           floatingActionButton: _buildFloatingActionButton(),
           floatingActionButtonLocation:
@@ -110,9 +121,17 @@ class _MainAppState extends State<MainApp> {
   Widget _buildBody(int index) {
     switch (index) {
       case 0:
-        return const HomeScreen();
+        return HomeScreen(
+          onAvatarTap: () => setState(() => _selectedIndex = 3),
+          onBalanceTap: () => setState(() => _selectedIndex = 2),
+          onAllTransactionsTap: () => setState(() => _selectedIndex = 1),
+        );
       case 1:
-        return const TransactionsScreen();
+        return TransactionsScreen(
+          onTypeChanged: (type) {
+            _activeTransactionType = type;
+          },
+        );
       case 2:
         return const StatisticsScreen();
       case 3:
@@ -199,10 +218,16 @@ class _MainAppState extends State<MainApp> {
   }
 
   void _showAddTransactionSheet() {
+    final isTransactionsTab = _selectedIndex == 1;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 600),
+        reverseDuration: Duration(milliseconds: 320),
+      ),
       builder: (context) => Container(
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
@@ -212,6 +237,10 @@ class _MainAppState extends State<MainApp> {
           ),
         ),
         child: AddTransactionSheet(
+          initialType: isTransactionsTab
+              ? _activeTransactionType
+              : TransactionType.expense,
+          lockTransactionType: isTransactionsTab,
           onTransactionAdded: () {
             setState(() {});
           },
