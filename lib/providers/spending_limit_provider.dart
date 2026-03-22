@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/index.dart';
 
 // SpendingLimit notifier
 class SpendingLimitNotifier extends ChangeNotifier {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   List<SpendingLimit> _limits = [];
   bool _isLoading = false;
   String? _currentUserId;
@@ -25,10 +28,43 @@ class SpendingLimitNotifier extends ChangeNotifier {
       return;
     }
 
-    _limits = _limitStore.putIfAbsent(
-      userId,
-      () => _buildDefaultLimits(userId),
-    );
+    final local = _limitStore.putIfAbsent(userId, () => <SpendingLimit>[]);
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('spending_limits')
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        if (local.isEmpty) {
+          local.addAll(_buildDefaultLimits(userId));
+        }
+        for (final limit in local) {
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('spending_limits')
+              .doc(limit.id)
+              .set(limit.toJson());
+        }
+      } else {
+        local
+          ..clear()
+          ..addAll(
+            snapshot.docs.map(
+              (doc) => SpendingLimit.fromJson({...doc.data(), 'id': doc.id}),
+            ),
+          );
+      }
+    } catch (_) {
+      if (local.isEmpty) {
+        local.addAll(_buildDefaultLimits(userId));
+      }
+    }
+
+    _limits = local;
 
     _isLoading = false;
     notifyListeners();
@@ -70,6 +106,13 @@ class SpendingLimitNotifier extends ChangeNotifier {
         ? limit
         : limit.copyWith(userId: _currentUserId);
     _limits.add(scoped);
+    _limitStore[_currentUserId!] = _limits;
+    _firestore
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('spending_limits')
+        .doc(scoped.id)
+        .set(scoped.toJson());
     notifyListeners();
   }
 
@@ -77,12 +120,30 @@ class SpendingLimitNotifier extends ChangeNotifier {
     final index = _limits.indexWhere((l) => l.id == limit.id);
     if (index != -1) {
       _limits[index] = limit;
+      if (_currentUserId != null) {
+        _limitStore[_currentUserId!] = _limits;
+        _firestore
+            .collection('users')
+            .doc(_currentUserId)
+            .collection('spending_limits')
+            .doc(limit.id)
+            .set(limit.toJson());
+      }
       notifyListeners();
     }
   }
 
   void deleteLimit(String id) {
     _limits.removeWhere((l) => l.id == id);
+    if (_currentUserId != null) {
+      _limitStore[_currentUserId!] = _limits;
+      _firestore
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('spending_limits')
+          .doc(id)
+          .delete();
+    }
     notifyListeners();
   }
 

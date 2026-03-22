@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/index.dart';
 
 // Wallet notifier
 class WalletNotifier extends ChangeNotifier {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   List<Wallet> _wallets = [];
   Wallet? _selectedWallet;
   bool _isLoading = false;
@@ -29,10 +32,43 @@ class WalletNotifier extends ChangeNotifier {
       return;
     }
 
-    _wallets = _walletStore.putIfAbsent(
-      userId,
-      () => _buildDefaultWallets(userId),
-    );
+    final local = _walletStore.putIfAbsent(userId, () => <Wallet>[]);
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('wallets')
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        if (local.isEmpty) {
+          local.addAll(_buildDefaultWallets(userId));
+        }
+        for (final wallet in local) {
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('wallets')
+              .doc(wallet.id)
+              .set(wallet.toJson());
+        }
+      } else {
+        local
+          ..clear()
+          ..addAll(
+            snapshot.docs.map(
+              (doc) => Wallet.fromJson({...doc.data(), 'id': doc.id}),
+            ),
+          );
+      }
+    } catch (_) {
+      if (local.isEmpty) {
+        local.addAll(_buildDefaultWallets(userId));
+      }
+    }
+
+    _wallets = local;
     final selectedWalletId = _selectedWalletIdStore[userId];
     if (selectedWalletId != null) {
       final index = _wallets.indexWhere((w) => w.id == selectedWalletId);
@@ -82,6 +118,13 @@ class WalletNotifier extends ChangeNotifier {
         ? wallet
         : wallet.copyWith(userId: _currentUserId);
     _wallets.add(scoped);
+    _walletStore[_currentUserId!] = _wallets;
+    _firestore
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('wallets')
+        .doc(scoped.id)
+        .set(scoped.toJson());
     notifyListeners();
   }
 
@@ -89,6 +132,15 @@ class WalletNotifier extends ChangeNotifier {
     final index = _wallets.indexWhere((w) => w.id == wallet.id);
     if (index != -1) {
       _wallets[index] = wallet;
+      if (_currentUserId != null) {
+        _walletStore[_currentUserId!] = _wallets;
+        _firestore
+            .collection('users')
+            .doc(_currentUserId)
+            .collection('wallets')
+            .doc(wallet.id)
+            .set(wallet.toJson());
+      }
       if (_selectedWallet?.id == wallet.id) {
         _selectedWallet = wallet;
       }
@@ -98,6 +150,15 @@ class WalletNotifier extends ChangeNotifier {
 
   void deleteWallet(String id) {
     _wallets.removeWhere((w) => w.id == id);
+    if (_currentUserId != null) {
+      _walletStore[_currentUserId!] = _wallets;
+      _firestore
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('wallets')
+          .doc(id)
+          .delete();
+    }
     if (_selectedWallet?.id == id && _wallets.isNotEmpty) {
       _selectedWallet = _wallets.first;
       if (_currentUserId != null) {

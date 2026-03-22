@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import '../models/index.dart' as models;
 
 // Category notifier
 class CategoryNotifier extends ChangeNotifier {
+  final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
+
   List<models.Category> _categories = [];
   bool _isLoading = false;
   String? _currentUserId;
@@ -26,11 +29,43 @@ class CategoryNotifier extends ChangeNotifier {
       return;
     }
 
-    _categories = _categoryStore.putIfAbsent(
-      userId,
-      () => _buildDefaultCategories(userId),
-    );
+    final local = _categoryStore.putIfAbsent(userId, () => <models.Category>[]);
 
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('categories')
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        if (local.isEmpty) {
+          local.addAll(_buildDefaultCategories(userId));
+        }
+        for (final category in local) {
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('categories')
+              .doc(category.id)
+              .set(category.toJson());
+        }
+      } else {
+        local
+          ..clear()
+          ..addAll(
+            snapshot.docs.map(
+              (doc) => models.Category.fromJson({...doc.data(), 'id': doc.id}),
+            ),
+          );
+      }
+    } catch (_) {
+      if (local.isEmpty) {
+        local.addAll(_buildDefaultCategories(userId));
+      }
+    }
+
+    _categories = local;
     _isLoading = false;
     notifyListeners();
   }
@@ -103,6 +138,13 @@ class CategoryNotifier extends ChangeNotifier {
         ? category
         : category.copyWith(userId: _currentUserId);
     _categories.add(scoped);
+    _categoryStore[_currentUserId!] = _categories;
+    _firestore
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('categories')
+        .doc(scoped.id)
+        .set(scoped.toJson());
     notifyListeners();
   }
 
@@ -110,12 +152,30 @@ class CategoryNotifier extends ChangeNotifier {
     final index = _categories.indexWhere((c) => c.id == category.id);
     if (index != -1) {
       _categories[index] = category;
+      if (_currentUserId != null) {
+        _categoryStore[_currentUserId!] = _categories;
+        _firestore
+            .collection('users')
+            .doc(_currentUserId)
+            .collection('categories')
+            .doc(category.id)
+            .set(category.toJson());
+      }
       notifyListeners();
     }
   }
 
   void deleteCategory(String id) {
     _categories.removeWhere((c) => c.id == id);
+    if (_currentUserId != null) {
+      _categoryStore[_currentUserId!] = _categories;
+      _firestore
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('categories')
+          .doc(id)
+          .delete();
+    }
     notifyListeners();
   }
 

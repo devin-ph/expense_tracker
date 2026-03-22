@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import '../models/index.dart';
 
 // Transaction notifier
 class TransactionNotifier extends ChangeNotifier {
+  final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
+
   List<Transaction> _transactions = [];
   bool _isLoading = false;
   String? _currentUserId;
@@ -25,10 +28,43 @@ class TransactionNotifier extends ChangeNotifier {
       return;
     }
 
-    _transactions = _transactionStore.putIfAbsent(
-      userId,
-      () => _buildDefaultTransactions(userId),
-    );
+    final local = _transactionStore.putIfAbsent(userId, () => <Transaction>[]);
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('transactions')
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        if (local.isEmpty) {
+          local.addAll(_buildDefaultTransactions(userId));
+        }
+        for (final tx in local) {
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('transactions')
+              .doc(tx.id)
+              .set(tx.toJson());
+        }
+      } else {
+        local
+          ..clear()
+          ..addAll(
+            snapshot.docs.map(
+              (doc) => Transaction.fromJson({...doc.data(), 'id': doc.id}),
+            ),
+          );
+      }
+    } catch (_) {
+      if (local.isEmpty) {
+        local.addAll(_buildDefaultTransactions(userId));
+      }
+    }
+
+    _transactions = local;
 
     _isLoading = false;
     notifyListeners();
@@ -79,6 +115,13 @@ class TransactionNotifier extends ChangeNotifier {
         ? transaction
         : transaction.copyWith(userId: _currentUserId);
     _transactions.add(scoped);
+    _transactionStore[_currentUserId!] = _transactions;
+    _firestore
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('transactions')
+        .doc(scoped.id)
+        .set(scoped.toJson());
     notifyListeners();
   }
 
@@ -86,12 +129,30 @@ class TransactionNotifier extends ChangeNotifier {
     final index = _transactions.indexWhere((t) => t.id == transaction.id);
     if (index != -1) {
       _transactions[index] = transaction;
+      if (_currentUserId != null) {
+        _transactionStore[_currentUserId!] = _transactions;
+        _firestore
+            .collection('users')
+            .doc(_currentUserId)
+            .collection('transactions')
+            .doc(transaction.id)
+            .set(transaction.toJson());
+      }
       notifyListeners();
     }
   }
 
   void deleteTransaction(String id) {
     _transactions.removeWhere((t) => t.id == id);
+    if (_currentUserId != null) {
+      _transactionStore[_currentUserId!] = _transactions;
+      _firestore
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('transactions')
+          .doc(id)
+          .delete();
+    }
     notifyListeners();
   }
 
