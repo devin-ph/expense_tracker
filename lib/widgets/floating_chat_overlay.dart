@@ -17,6 +17,51 @@ class FloatingChatOverlay extends StatefulWidget {
 }
 
 class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
+  static const Map<String, List<String>> _expenseCategoryOptions = {
+    'cat1': [
+      'Tiền thuê nhà/ Trả góp mua nhà',
+      'Điện, nước, internet, truyền hình',
+      'Phí bảo hiểm (y tế, xe, nhà)',
+      'Học phí/ Phí dịch vụ định kỳ',
+      'Thẻ tín dụng',
+      'Khác',
+    ],
+    'cat2': [
+      'Thực phẩm, nhu yếu phẩm',
+      'Xăng xe, vé xe buýt...',
+      'Quần áo cơ bản, giày dép',
+      'Khám sức khỏe định kỳ',
+      'Dụng cụ sinh hoạt',
+      'Khác',
+    ],
+    'cat3': [
+      'Quà tặng cho bạn bè/người thân',
+      'Tiệc cưới, sinh nhật, lễ hội',
+      'Sửa chữa đồ dùng hỏng hóc',
+      'Đóng góp xã hội, từ thiện',
+      'Khác',
+    ],
+    'cat4': [
+      'Chi phí y tế khẩn cấp',
+      'Hỗ trợ tài chính cho người thân',
+      'Thiên tai hoặc sự cố bất khả kháng',
+      'Khác',
+    ],
+    'cat5': [
+      'Ăn uống ngoài, cà phê',
+      'Du lịch, nghỉ dưỡng',
+      'Mua sắm',
+      'Giải trí: xem phim, concert, thể thao...',
+      'Sở thích cá nhân',
+      'Khác',
+    ],
+  };
+
+  static const Map<String, List<String>> _incomeCategoryOptions = {
+    'cat_income': ['Lương tháng', 'Lương làm thêm', 'Phụ cấp', 'Khác'],
+    'cat_bonus': ['Thưởng hiệu suất', 'Thưởng lễ/tết', 'Hoa hồng', 'Khác'],
+  };
+
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
@@ -298,13 +343,14 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
       return;
     }
 
-    final categories = context
-        .read<CategoryNotifier>()
-        .categories
+    final categoryNotifier = context.read<CategoryNotifier>();
+    final categories = categoryNotifier.categories
         .map((item) => item.name)
         .toList();
 
-    final chatContext = _buildChatSystemContext();
+    final chatContext = _shouldAttachFinancialContext(message)
+        ? _buildChatSystemContext(categoryNotifier: categoryNotifier)
+        : const <String, dynamic>{};
 
     final response = await _chatApiService.sendMessage(
       message: message,
@@ -407,6 +453,44 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
     final hasTransactionVerb = transactionKeywords.any(normalized.contains);
 
     return hasAmount && hasTransactionVerb;
+  }
+
+  bool _shouldAttachFinancialContext(String input) {
+    final normalized = input.toLowerCase().trim();
+    if (normalized.isEmpty) return false;
+
+    final greetingOnly = RegExp(
+      r'^(hi|hello|hey|alo|xin chào|chào|chao|ok|oke|okay|thanks|thank you|cảm ơn|cam on)[!,. ]*$',
+      caseSensitive: false,
+    );
+    if (greetingOnly.hasMatch(normalized)) {
+      return false;
+    }
+
+    const financeKeywords = [
+      'số dư',
+      'so du',
+      'bao nhiêu tiền',
+      'bao nhieu tien',
+      'hạn mức',
+      'han muc',
+      'chi tiêu',
+      'chi tieu',
+      'thu nhập',
+      'thu nhap',
+      'giao dịch',
+      'giao dich',
+      'ví',
+      'vi ',
+      'mua',
+      'chi ',
+      'thu ',
+      'nhận',
+      'nhan ',
+    ];
+
+    return _isLikelyTransactionIntent(normalized) ||
+        financeKeywords.any(normalized.contains);
   }
 
   void _handlePendingTimeResponse(String userMessage) {
@@ -619,9 +703,13 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
       final rows = <String>[];
       for (final limit in limitNotifier.limits) {
         final category = categoryNotifier.getCategoryById(limit.categoryId);
+        final effectiveStart =
+            limit.lastResetAt != null && limit.lastResetAt!.isAfter(monthStart)
+            ? limit.lastResetAt!
+            : monthStart;
         final spent = transactionNotifier
             .getTransactionsByDateRange(
-              monthStart,
+              effectiveStart,
               monthEnd,
               walletId: walletId,
             )
@@ -658,11 +746,12 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
     return null;
   }
 
-  Map<String, dynamic> _buildChatSystemContext() {
+  Map<String, dynamic> _buildChatSystemContext({
+    required CategoryNotifier categoryNotifier,
+  }) {
     final walletNotifier = context.read<WalletNotifier>();
     final transactionNotifier = context.read<TransactionNotifier>();
     final limitNotifier = context.read<SpendingLimitNotifier>();
-    final categoryNotifier = context.read<CategoryNotifier>();
 
     final selectedWallet = walletNotifier.selectedWallet;
     final selectedWalletId = selectedWallet?.id;
@@ -677,9 +766,13 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
 
     final categoryLimits = limitNotifier.limits.map((limit) {
       final category = categoryNotifier.getCategoryById(limit.categoryId);
+      final effectiveStart =
+          limit.lastResetAt != null && limit.lastResetAt!.isAfter(monthStart)
+          ? limit.lastResetAt!
+          : monthStart;
       final spent = transactionNotifier
           .getTransactionsByDateRange(
-            monthStart,
+            effectiveStart,
             monthEnd,
             walletId: selectedWalletId,
           )
@@ -698,6 +791,18 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
       };
     }).toList();
 
+    final categoryCatalog = categoryNotifier.categories.map((category) {
+      final options = category.type == TransactionType.expense
+          ? (_expenseCategoryOptions[category.id] ?? const <String>[])
+          : (_incomeCategoryOptions[category.id] ?? const <String>[]);
+      return {
+        'id': category.id,
+        'name': category.name,
+        'type': category.type.name,
+        'detail_options': options,
+      };
+    }).toList();
+
     return {
       'selected_wallet_balance': selectedWallet?.balance ?? 0,
       'total_balance': walletNotifier.wallets.fold<double>(
@@ -706,6 +811,7 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
       ),
       'today_expense': todayExpense,
       'category_limits': categoryLimits,
+      'category_catalog': categoryCatalog,
     };
   }
 
@@ -727,13 +833,55 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
     if (categories.isEmpty) return null;
 
     final hint = (draft.categoryHint ?? '').toLowerCase();
+    final categoryName = (draft.categoryName ?? '').toLowerCase().trim();
+    final categoryDetail = (draft.categoryDetail ?? '').toLowerCase().trim();
+    final note = (draft.note ?? '').toLowerCase().trim();
+    final combinedText = _normalizeForMatching(
+      '$categoryName $categoryDetail $note $hint',
+    );
+
+    final inferredCategoryId = draft.type == TransactionType.expense
+        ? _inferExpenseCategoryId(combinedText)
+        : null;
+
     Category chosenCategory = categories.first;
+    if (inferredCategoryId != null) {
+      final byRule = categories.where((item) => item.id == inferredCategoryId);
+      if (byRule.isNotEmpty) {
+        chosenCategory = byRule.first;
+      }
+    }
+
     for (final category in categories) {
-      if (hint.contains(category.name.toLowerCase())) {
+      final categoryLower = category.name.toLowerCase();
+      final exactNameMatched =
+          categoryName.isNotEmpty &&
+          (categoryLower == categoryName ||
+              categoryLower.contains(categoryName) ||
+              categoryName.contains(categoryLower));
+      final hintMatched = hint.contains(categoryLower);
+      if (inferredCategoryId != null && category.id != inferredCategoryId) {
+        continue;
+      }
+
+      if (exactNameMatched || hintMatched) {
         chosenCategory = category;
         break;
       }
     }
+
+    final contentText = (draft.note ?? '').trim();
+    final detailText = _resolveCategoryDetail(
+      categoryId: chosenCategory.id,
+      draftDetail: draft.categoryDetail,
+      textForInference: combinedText,
+    );
+    final composedNote = () {
+      if (detailText.isEmpty && contentText.isEmpty) return null;
+      if (detailText.isEmpty) return contentText;
+      if (contentText.isEmpty) return detailText;
+      return '$detailText | $contentText';
+    }();
 
     final now = DateTime.now();
     final transactionDate = draft.date ?? now;
@@ -744,7 +892,7 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
       categoryId: chosenCategory.id,
       type: draft.type,
       amount: draft.amount,
-      note: draft.note,
+      note: composedNote,
       date: transactionDate,
       createdAt: now,
     );
@@ -773,6 +921,117 @@ class _FloatingChatOverlayState extends State<FloatingChatOverlay> {
 
     walletNotifier.updateWallet(wallet.copyWith(balance: newBalance));
     return transaction;
+  }
+
+  String _normalizeForMatching(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('đ', 'd')
+        .replaceAll(RegExp(r'[^a-z0-9à-ỹ\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String? _inferExpenseCategoryId(String normalizedText) {
+    const essentialFoodKeywords = [
+      'an ',
+      'an uong',
+      'uong',
+      'com',
+      'bun',
+      'pho',
+      'do an',
+      'thuc pham',
+      'nhu yeu pham',
+      'sieu thi',
+      'cho',
+      'tap hoa',
+      'do sieu thi',
+      'groceries',
+      'food',
+    ];
+
+    const transportKeywords = ['xang', 'xe buyt', 'grab', 'taxi', 'di lai'];
+    const clothingKeywords = ['quan ao', 'giay dep', 'quan', 'ao', 'giay'];
+    const healthKeywords = ['kham', 'benh vien', 'thuoc', 'y te'];
+    const emergencyKeywords = ['khan cap', 'cap cuu', 'thien tai', 'su co'];
+    const fixedKeywords = [
+      'tien nha',
+      'thue nha',
+      'dien',
+      'nuoc',
+      'internet',
+      'bao hiem',
+      'hoc phi',
+      'tra gop',
+      'the tin dung',
+    ];
+
+    bool hasAny(List<String> keywords) =>
+        keywords.any((item) => normalizedText.contains(item));
+
+    if (hasAny(essentialFoodKeywords) ||
+        hasAny(transportKeywords) ||
+        hasAny(clothingKeywords) ||
+        hasAny(healthKeywords)) {
+      return 'cat2';
+    }
+    if (hasAny(fixedKeywords)) return 'cat1';
+    if (hasAny(emergencyKeywords)) return 'cat4';
+
+    return null;
+  }
+
+  String _resolveCategoryDetail({
+    required String categoryId,
+    required String? draftDetail,
+    required String textForInference,
+  }) {
+    final normalizedDetail = _normalizeForMatching(draftDetail ?? '');
+    final options =
+        _expenseCategoryOptions[categoryId] ??
+        _incomeCategoryOptions[categoryId] ??
+        const <String>[];
+
+    for (final option in options) {
+      final optionNormalized = _normalizeForMatching(option);
+      if (optionNormalized.isNotEmpty &&
+          (normalizedDetail == optionNormalized ||
+              normalizedDetail.contains(optionNormalized) ||
+              optionNormalized.contains(normalizedDetail))) {
+        return option;
+      }
+    }
+
+    if (categoryId == 'cat2') {
+      if (RegExp(
+        r'\b(an|uong|com|bun|pho|thuc pham|nhu yeu pham|sieu thi|tap hoa|food|groceries)\b',
+      ).hasMatch(textForInference)) {
+        return 'Thực phẩm, nhu yếu phẩm';
+      }
+      if (RegExp(
+        r'\b(xang|xe buyt|grab|taxi|di lai)\b',
+      ).hasMatch(textForInference)) {
+        return 'Xăng xe, vé xe buýt...';
+      }
+      if (RegExp(
+        r'\b(quan ao|giay dep|mua ao|mua quan|mua giay)\b',
+      ).hasMatch(textForInference)) {
+        return 'Quần áo cơ bản, giày dép';
+      }
+      if (RegExp(
+        r'\b(kham|benh vien|thuoc|y te)\b',
+      ).hasMatch(textForInference)) {
+        return 'Khám sức khỏe định kỳ';
+      }
+      return 'Khác';
+    }
+
+    if (draftDetail != null && draftDetail.trim().isNotEmpty) {
+      return draftDetail.trim();
+    }
+
+    return options.isNotEmpty ? options.first : '';
   }
 
   String _buildFingerprint(Transaction transaction) {
