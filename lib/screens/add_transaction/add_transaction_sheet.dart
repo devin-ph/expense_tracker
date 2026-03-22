@@ -597,7 +597,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: hasSelectedOption ? _selectedIncomeOption : null,
-                  hint: const Text('Chọn chi tiết danh mục thu nhập'),
+                  hint: const Text('Chọn chi tiết danh mục'),
                   items: selectedOptions.map<DropdownMenuItem<String>>((option) {
                     return DropdownMenuItem<String>(
                       value: option,
