@@ -382,13 +382,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 fillColor: _transactionType == TransactionType.income
                     ? Colors.green.withOpacity(0.05)
                     : Colors.red.withOpacity(0.05),
+                suffixText: 'đ',
+                suffixStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  decoration: TextDecoration.none,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 19,
+                ),
                 // Keep the caret slightly to the right of the fixed centered hint when focused.
                 prefixIcon: _amountFocusNode.hasFocus &&
                         _amountController.text.isEmpty
-                    ? const SizedBox(width: AppSpacing.md)
+                    ? const SizedBox(width: AppSpacing.xxl)
                     : null,
                 prefixIconConstraints: const BoxConstraints(
-                  minWidth: AppSpacing.xl,
+                  minWidth: 40,
                   minHeight: 0,
                 ),
                 border: OutlineInputBorder(
@@ -421,7 +427,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   '0',
                   style: Theme.of(
                     context,
-                  ).textTheme.headlineSmall?.copyWith(color: Colors.grey),
+                  ).textTheme.headlineSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
               ),
           ],
@@ -1050,8 +1058,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   Future<bool> _promptOtherExpenseDetail() async {
+    final rootContext = context;
     final result = await showDialog<String>(
-      context: context,
+      context: rootContext,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Nhập thông tin chi tiêu khác'),
@@ -1072,7 +1081,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               onPressed: () {
                 final value = _otherExpenseController.text.trim();
                 if (value.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  final messenger = ScaffoldMessenger.maybeOf(rootContext);
+                  messenger?.showSnackBar(
                     const SnackBar(
                       content: Text('Vui lòng nhập thông tin chi tiêu'),
                     ),
@@ -1178,7 +1188,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -1372,7 +1384,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 // Icon selector
                 Text(
                   'Biểu tượng',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: Theme.of(dialogContext).textTheme.titleSmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Wrap(
@@ -1388,7 +1400,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             decoration: BoxDecoration(
                               border: Border.all(
                                 color: selectedIcon == icon
-                                    ? Theme.of(context).primaryColor
+                                    ? Theme.of(dialogContext).primaryColor
                                     : Colors.grey.withOpacity(0.3),
                                 width: selectedIcon == icon ? 2 : 1,
                               ),
@@ -1411,7 +1423,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 // Name input
                 Text(
                   'Tên danh mục',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: Theme.of(dialogContext).textTheme.titleSmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
@@ -1425,7 +1437,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 // Type selector
-                Text('Loại', style: Theme.of(context).textTheme.titleSmall),
+                Text('Loại', style: Theme.of(dialogContext).textTheme.titleSmall),
                 const SizedBox(height: AppSpacing.md),
                 Row(
                   children: [
