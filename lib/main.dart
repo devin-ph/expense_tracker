@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'config/theme.dart';
 import 'config/constants.dart';
 import 'models/index.dart';
@@ -7,10 +9,13 @@ import 'providers/index.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/transactions/transactions_screen.dart';
 import 'screens/statistics/statistics_screen.dart';
-import 'screens/auth/auth_screen.dart';
+import 'screens/auth/index.dart';
 import 'screens/add_transaction/add_transaction_sheet.dart';
+import 'widgets/index.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -73,6 +78,8 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
+  TransactionType _activeTransactionType = TransactionType.income;
+  int _transactionsTabIndex = 0;
 
   @override
   void initState() {
@@ -93,7 +100,16 @@ class _MainAppState extends State<MainApp> {
         }
 
         return Scaffold(
-          body: _buildBody(_selectedIndex),
+          body: Stack(
+            children: [
+              _buildBody(_selectedIndex),
+              const Positioned(
+                right: AppSpacing.lg,
+                bottom: 96,
+                child: FloatingChatOverlay(),
+              ),
+            ],
+          ),
           bottomNavigationBar: _buildBottomNavigationBar(),
           floatingActionButton: _buildFloatingActionButton(),
           floatingActionButtonLocation:
@@ -112,7 +128,18 @@ class _MainAppState extends State<MainApp> {
           onAllTransactionsTap: () => setState(() => _selectedIndex = 1),
         );
       case 1:
-        return const TransactionsScreen();
+        return TransactionsScreen(
+          initialTabIndex: _transactionsTabIndex,
+          onTabIndexChanged: (index) {
+            _transactionsTabIndex = index;
+          },
+          onTypeChanged: (type) {
+            if (_activeTransactionType == type) return;
+            setState(() {
+              _activeTransactionType = type;
+            });
+          },
+        );
       case 2:
         return const StatisticsScreen();
       case 3:
@@ -146,40 +173,51 @@ class _MainAppState extends State<MainApp> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _selectedIndex == index;
     final theme = Theme.of(context);
-
-    // Use accent color for selected items in dark mode for better contrast
-    final selectedColor = theme.brightness == Brightness.dark
-        ? const Color(0xFF06B6D4) // Cyan accent
-        : theme.primaryColor;
+    final selectedColor = primaryColor;
+    final unselectedColor = theme.brightness == Brightness.dark
+        ? const Color(0xFF9CA3AF)
+        : Colors.grey;
 
     return Expanded(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => setState(() => _selectedIndex = index),
-          splashColor: theme.primaryColor.withOpacity(0.1),
-          highlightColor: theme.primaryColor.withOpacity(0.05),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? selectedColor : Colors.grey,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: isSelected ? selectedColor : Colors.grey,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  fontSize: 10,
+          onTapDown: (_) {
+            if (_selectedIndex != index) {
+              setState(() => _selectedIndex = index);
+            }
+          },
+          onTap: () {},
+          splashFactory: InkSplash.splashFactory,
+          borderRadius: BorderRadius.circular(12),
+          splashColor: selectedColor.withValues(alpha: 0.2),
+          hoverColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? selectedColor : unselectedColor,
+                  size: 24,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isSelected ? selectedColor : unselectedColor,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: 10,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -199,10 +237,16 @@ class _MainAppState extends State<MainApp> {
   }
 
   void _showAddTransactionSheet() {
+    final isTransactionsTab = _selectedIndex == 1;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 600),
+        reverseDuration: Duration(milliseconds: 320),
+      ),
       builder: (context) => Container(
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
@@ -212,6 +256,12 @@ class _MainAppState extends State<MainApp> {
           ),
         ),
         child: AddTransactionSheet(
+          initialType: isTransactionsTab
+            ? (_transactionsTabIndex == 0
+              ? TransactionType.income
+              : TransactionType.expense)
+            : TransactionType.expense,
+          lockTransactionType: false,
           onTransactionAdded: () {
             setState(() {});
           },

@@ -58,6 +58,9 @@ class WalletNotifier extends ChangeNotifier {
     final index = _wallets.indexWhere((w) => w.id == wallet.id);
     if (index != -1) {
       _wallets[index] = wallet;
+      if (_selectedWallet?.id == wallet.id) {
+        _selectedWallet = wallet;
+      }
       notifyListeners();
     }
   }
