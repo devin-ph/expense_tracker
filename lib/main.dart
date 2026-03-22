@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'config/theme.dart';
 import 'config/constants.dart';
 import 'models/index.dart';
@@ -7,11 +9,13 @@ import 'providers/index.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/transactions/transactions_screen.dart';
 import 'screens/statistics/statistics_screen.dart';
-import 'screens/auth/auth_screen.dart';
+import 'screens/auth/index.dart';
 import 'screens/add_transaction/add_transaction_sheet.dart';
 import 'widgets/index.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
