@@ -80,7 +80,7 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
   TransactionType _activeTransactionType = TransactionType.income;
-  int _transactionsTabIndex = 0;
+  String? _syncedUserId;
 
   @override
   void initState() {
@@ -95,6 +95,18 @@ class _MainAppState extends State<MainApp> {
   Widget build(BuildContext context) {
     return Consumer<AuthNotifier>(
       builder: (context, authNotifier, _) {
+        final currentUserId = authNotifier.currentUser?.id;
+        if (_syncedUserId != currentUserId) {
+          _syncedUserId = currentUserId;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            context.read<WalletNotifier>().syncForUser(currentUserId);
+            context.read<CategoryNotifier>().syncForUser(currentUserId);
+            context.read<TransactionNotifier>().syncForUser(currentUserId);
+            context.read<SpendingLimitNotifier>().syncForUser(currentUserId);
+          });
+        }
+
         if (!authNotifier.isAuthenticated) {
           if (authNotifier.isLoading) {
             return const Scaffold(
@@ -263,10 +275,10 @@ class _MainAppState extends State<MainApp> {
         ),
         child: AddTransactionSheet(
           initialType: isTransactionsTab
-            ? (_transactionsTabIndex == 0
-              ? TransactionType.income
-              : TransactionType.expense)
-            : TransactionType.expense,
+              ? (_transactionsTabIndex == 0
+                    ? TransactionType.income
+                    : TransactionType.expense)
+              : TransactionType.expense,
           lockTransactionType: false,
           onTransactionAdded: () {
             setState(() {});

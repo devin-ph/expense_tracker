@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .getCategoriesByType(TransactionType.expense);
     final limitNotifier = rootContext.read<SpendingLimitNotifier>();
     final currentUserId =
-        rootContext.read<AuthNotifier>().currentUser?.id ?? 'user1';
+        rootContext.read<AuthNotifier>().currentUser?.id ?? '';
     final availableCategories = expenseCategories
         .where(
           (category) => limitNotifier.getLimitByCategoryId(category.id) == null,

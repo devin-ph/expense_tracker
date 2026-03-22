@@ -1202,7 +1202,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
       final transaction = Transaction(
         id: const Uuid().v4(),
-        userId: 'user1',
+        userId: context.read<AuthNotifier>().currentUser?.id ?? '',
         walletId: _selectedWalletId!,
         categoryId: _selectedCategoryId!,
         type: _transactionType,
@@ -1549,7 +1549,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       try {
                         final newCategory = Category(
                           id: const Uuid().v4(),
-                          userId: 'user1', // Current user
+                          userId:
+                              context.read<AuthNotifier>().currentUser?.id ??
+                              '',
                           name: nameController.text.trim(),
                           icon: selectedIcon,
                           type: selectedType,
