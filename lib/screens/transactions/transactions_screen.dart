@@ -12,8 +12,15 @@ import '../../config/constants.dart';
 /// Implemented by: Đinh Phương Ly
 class TransactionsScreen extends StatefulWidget {
   final ValueChanged<TransactionType>? onTypeChanged;
+  final ValueChanged<int>? onTabIndexChanged;
+  final int initialTabIndex;
 
-  const TransactionsScreen({Key? key, this.onTypeChanged}) : super(key: key);
+  const TransactionsScreen({
+    Key? key,
+    this.onTypeChanged,
+    this.onTabIndexChanged,
+    this.initialTabIndex = 0,
+  }) : super(key: key);
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -24,7 +31,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   late TabController _tabController;
   DateTime? _startDate;
   DateTime? _endDate;
-  int _lastReportedTabIndex = 0;
+  TransactionType? _lastReportedType;
 
   _TransactionNoteParts _parseTransactionNote(String? rawNote) {
     final note = rawNote?.trim() ?? '';
@@ -56,13 +63,17 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
+    );
     _tabController.addListener(_handleTabChanged);
     _startDate = DateTime.now().subtract(const Duration(days: 30));
     _endDate = DateTime.now();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onTypeChanged?.call(TransactionType.income);
+      _reportCurrentType();
     });
   }
 
@@ -74,19 +85,22 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   }
 
   void _handleTabChanged() {
-    if (_tabController.index == _lastReportedTabIndex) {
-      return;
-    }
-
-    _lastReportedTabIndex = _tabController.index;
-    final currentType = _tabController.index == 0
-        ? TransactionType.income
-        : TransactionType.expense;
-
-    widget.onTypeChanged?.call(currentType);
+    _reportCurrentType();
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _reportCurrentType() {
+    widget.onTabIndexChanged?.call(_tabController.index);
+    final currentType = _tabController.index == 0
+        ? TransactionType.income
+        : TransactionType.expense;
+    if (_lastReportedType == currentType) {
+      return;
+    }
+    _lastReportedType = currentType;
+    widget.onTypeChanged?.call(currentType);
   }
 
   @override
@@ -97,6 +111,14 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
+          onTap: (index) {
+            widget.onTabIndexChanged?.call(index);
+            final type = index == 0
+                ? TransactionType.income
+                : TransactionType.expense;
+            _lastReportedType = type;
+            widget.onTypeChanged?.call(type);
+          },
           tabs: const [
             Tab(text: 'Thu nhập'),
             Tab(text: 'Chi tiêu'),
