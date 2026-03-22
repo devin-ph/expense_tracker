@@ -266,11 +266,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Widget _buildStatistics() {
-    return Consumer<TransactionNotifier>(
-      builder: (context, transactionNotifier, _) {
+    return Consumer2<TransactionNotifier, WalletNotifier>(
+      builder: (context, transactionNotifier, walletNotifier, _) {
+        final walletId = walletNotifier.selectedWallet?.id;
         final filtered = transactionNotifier.getTransactionsByDateRange(
           _startDate ?? DateTime.now(),
           _endDate ?? DateTime.now(),
+          walletId: walletId,
         );
 
         // Filter by selected type if applicable
@@ -320,11 +322,19 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Widget _buildTransactionList() {
-    return Consumer2<TransactionNotifier, CategoryNotifier>(
-      builder: (context, transactionNotifier, categoryNotifier, _) {
+    return Consumer3<TransactionNotifier, CategoryNotifier, WalletNotifier>(
+      builder: (
+        context,
+        transactionNotifier,
+        categoryNotifier,
+        walletNotifier,
+        _,
+      ) {
+        final walletId = walletNotifier.selectedWallet?.id;
         var filtered = transactionNotifier.getTransactionsByDateRange(
           _startDate ?? DateTime.now(),
           _endDate ?? DateTime.now(),
+          walletId: walletId,
         );
 
         // Filter by selected type if applicable
