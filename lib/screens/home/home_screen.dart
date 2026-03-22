@@ -584,14 +584,13 @@ class _HomeScreenState extends State<HomeScreen> {
     const walletTextPrimary = Color(0xFF333333);
     const walletTextSecondary = Color(0xFF5C5C5C);
 
-    return Consumer<WalletNotifier>(
-      builder: (context, walletNotifier, _) {
+    return Consumer2<WalletNotifier, TransactionNotifier>(
+      builder: (context, walletNotifier, transactionNotifier, _) {
         final selectedWallet = walletNotifier.selectedWallet;
         if (selectedWallet == null) {
           return const SizedBox();
         }
 
-        final transactionNotifier = context.read<TransactionNotifier>();
         final walletTransactions = transactionNotifier.getTransactionsByWallet(
           selectedWallet.id,
         );
@@ -874,8 +873,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 _,
               ) {
                 final walletId = walletNotifier.selectedWallet?.id;
-                final todayTransactions = transactionNotifier
-                    .getTodayTransactions(walletId: walletId);
+                final todayTransactions =
+                    transactionNotifier.getTodayTransactions(walletId: walletId)
+                      ..sort((a, b) => b.date.compareTo(a.date));
 
                 if (todayTransactions.isEmpty) {
                   return Padding(
