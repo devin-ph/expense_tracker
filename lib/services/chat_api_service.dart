@@ -9,6 +9,8 @@ class ParsedTransactionDraft {
   final double amount;
   final TransactionType type;
   final String? note;
+  final String? categoryName;
+  final String? categoryDetail;
   final String? categoryHint;
   final DateTime? date;
   final bool needsTimeConfirmation;
@@ -18,6 +20,8 @@ class ParsedTransactionDraft {
     required this.amount,
     required this.type,
     this.note,
+    this.categoryName,
+    this.categoryDetail,
     this.categoryHint,
     this.date,
     this.needsTimeConfirmation = false,
@@ -28,6 +32,8 @@ class ParsedTransactionDraft {
     double? amount,
     TransactionType? type,
     String? note,
+    String? categoryName,
+    String? categoryDetail,
     String? categoryHint,
     DateTime? date,
     bool? needsTimeConfirmation,
@@ -37,6 +43,8 @@ class ParsedTransactionDraft {
       amount: amount ?? this.amount,
       type: type ?? this.type,
       note: note ?? this.note,
+      categoryName: categoryName ?? this.categoryName,
+      categoryDetail: categoryDetail ?? this.categoryDetail,
       categoryHint: categoryHint ?? this.categoryHint,
       date: date ?? this.date,
       needsTimeConfirmation:
@@ -211,11 +219,30 @@ class ChatApiService {
     final timeContext = _extractDateContext(originalText);
     final parsedDate = dateRaw == null ? null : DateTime.tryParse(dateRaw);
 
+    final categoryName =
+        map['category_name']?.toString() ?? map['category']?.toString();
+    final categoryDetail =
+        map['category_detail']?.toString() ?? map['detail']?.toString();
+    final spendingContent =
+        map['spending_content']?.toString() ?? map['note']?.toString();
+
+    final hintParts = <String>[
+      if (categoryName != null && categoryName.trim().isNotEmpty)
+        categoryName.trim(),
+      if (categoryDetail != null && categoryDetail.trim().isNotEmpty)
+        categoryDetail.trim(),
+      originalText,
+    ];
+
     return ParsedTransactionDraft(
       amount: amount,
       type: type,
-      note: map['note']?.toString() ?? _extractTransactionNote(originalText),
-      categoryHint: map['category']?.toString(),
+      note: (spendingContent != null && spendingContent.trim().isNotEmpty)
+          ? spendingContent.trim()
+          : _extractTransactionNote(originalText),
+      categoryName: categoryName,
+      categoryDetail: categoryDetail,
+      categoryHint: hintParts.join(' ').trim(),
       date: parsedDate ?? timeContext.date,
       needsTimeConfirmation: timeContext.needsTimeConfirmation,
       confirmationQuestion: timeContext.confirmationQuestion,

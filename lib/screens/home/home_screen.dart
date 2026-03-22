@@ -422,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (result.action) {
       case _LimitActionType.reset:
         limitNotifier.updateLimit(
-          limit.copyWith(limitAmount: 0, updatedAt: now),
+          limit.copyWith(lastResetAt: now, updatedAt: now),
         );
         break;
       case _LimitActionType.delete:
@@ -810,13 +810,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         .read<WalletNotifier>()
                         .selectedWallet
                         ?.id;
+                    final monthStart = DateTime.now().copyWith(day: 1);
+                    final monthEnd = DateTime.now().copyWith(
+                      month: DateTime.now().month + 1,
+                      day: 0,
+                    );
+                    final effectiveStart =
+                        limit.lastResetAt != null &&
+                            limit.lastResetAt!.isAfter(monthStart)
+                        ? limit.lastResetAt!
+                        : monthStart;
                     final spent = transactionNotifier
                         .getTransactionsByDateRange(
-                          DateTime.now().copyWith(day: 1),
-                          DateTime.now().copyWith(
-                            month: DateTime.now().month + 1,
-                            day: 0,
-                          ),
+                          effectiveStart,
+                          monthEnd,
                           walletId: walletId,
                         )
                         .where(
