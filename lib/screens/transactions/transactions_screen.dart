@@ -41,18 +41,24 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
     final separator = ' - ';
     if (!note.contains(separator)) {
-      return _TransactionNoteParts(note: note);
+      // Current save format uses this as category detail when no free-text note exists.
+      return _TransactionNoteParts(detail: note);
     }
 
     final parts = note.split(separator);
-    if (parts.length == 2) {
-      return _TransactionNoteParts(detail: parts[0].trim(), note: parts[1].trim());
-    }
 
-    if (parts.length >= 3 && parts.first.trim() == 'Khác') {
+    if (parts.first.trim() == 'Khác') {
+      if (parts.length == 2) {
+        return _TransactionNoteParts(detail: parts.take(2).join(separator).trim());
+      }
+
       final detail = parts.take(2).join(separator).trim();
       final noteText = parts.skip(2).join(separator).trim();
       return _TransactionNoteParts(detail: detail, note: noteText);
+    }
+
+    if (parts.length == 2) {
+      return _TransactionNoteParts(detail: parts[0].trim(), note: parts[1].trim());
     }
 
     final detail = parts.first.trim();
