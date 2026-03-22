@@ -14,11 +14,11 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onAllTransactionsTap;
 
   const HomeScreen({
-    Key? key,
+    super.key,
     this.onAvatarTap,
     this.onBalanceTap,
     this.onAllTransactionsTap,
-  }) : super(key: key);
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -118,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<String>(
-                        value: selectedCategoryId,
+                        initialValue: selectedCategoryId,
                         decoration: const InputDecoration(
                           labelText: 'Danh mục',
                         ),
@@ -512,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     radius: 20,
                     backgroundColor: avatarBgColor,
                     backgroundImage: hasPhoto
-                        ? NetworkImage(user!.photoUrl!)
+                        ? NetworkImage(user.photoUrl!)
                         : null,
                     child: hasPhoto
                         ? null

@@ -6,7 +6,7 @@ import '../../config/constants.dart';
 /// Authentication Screen - Login
 /// Implemented by: Phạm Ngọc Minh Nam
 class AuthLoginScreen extends StatefulWidget {
-  const AuthLoginScreen({Key? key}) : super(key: key);
+  const AuthLoginScreen({super.key});
 
   @override
   State<AuthLoginScreen> createState() => _AuthLoginScreenState();

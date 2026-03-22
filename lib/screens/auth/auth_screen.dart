@@ -8,7 +8,7 @@ import '../../config/constants.dart';
 /// Profile Screen - User profile and settings
 /// Implemented by: Phạm Ngọc Minh Nam
 class AuthLoginScreen extends StatefulWidget {
-  const AuthLoginScreen({Key? key}) : super(key: key);
+  const AuthLoginScreen({super.key});
 
   @override
   State<AuthLoginScreen> createState() => _AuthLoginScreenState();
@@ -227,7 +227,7 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
 
 /// Profile and Settings Screen
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();

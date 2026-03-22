@@ -10,7 +10,7 @@ import '../../../config/constants.dart';
 class EditProfileDialog extends StatefulWidget {
   final User user;
 
-  const EditProfileDialog({Key? key, required this.user}) : super(key: key);
+  const EditProfileDialog({super.key, required this.user});
 
   @override
   State<EditProfileDialog> createState() => _EditProfileDialogState();

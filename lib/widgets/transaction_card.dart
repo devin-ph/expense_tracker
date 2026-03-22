@@ -17,7 +17,7 @@ class TransactionCard extends StatelessWidget {
   final VoidCallback? onLongPress;
 
   const TransactionCard({
-    Key? key,
+    super.key,
     required this.categoryName,
     required this.categoryIcon,
     required this.amount,
@@ -27,8 +27,7 @@ class TransactionCard extends StatelessWidget {
     this.isIncome = false,
     this.onTap,
     this.onLongPress,
-  }) : attachments = attachments ?? const <String>[],
-       super(key: key);
+  }) : attachments = attachments ?? const <String>[];
 
   String _attachmentName(String payload) {
     try {

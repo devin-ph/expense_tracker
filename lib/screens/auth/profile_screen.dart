@@ -8,7 +8,7 @@ import 'dialogs/edit_profile_dialog.dart';
 
 /// Profile and Settings Screen
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();

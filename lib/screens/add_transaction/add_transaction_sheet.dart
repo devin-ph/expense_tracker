@@ -17,11 +17,11 @@ class AddTransactionSheet extends StatefulWidget {
   final bool lockTransactionType;
 
   const AddTransactionSheet({
-    Key? key,
+    super.key,
     this.onTransactionAdded,
     this.initialType = TransactionType.expense,
     this.lockTransactionType = false,
-  }) : super(key: key);
+  });
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
