@@ -26,6 +26,33 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   DateTime? _endDate;
   int _lastReportedTabIndex = 0;
 
+  _TransactionNoteParts _parseTransactionNote(String? rawNote) {
+    final note = rawNote?.trim() ?? '';
+    if (note.isEmpty) {
+      return const _TransactionNoteParts();
+    }
+
+    final separator = ' - ';
+    if (!note.contains(separator)) {
+      return _TransactionNoteParts(note: note);
+    }
+
+    final parts = note.split(separator);
+    if (parts.length == 2) {
+      return _TransactionNoteParts(detail: parts[0].trim(), note: parts[1].trim());
+    }
+
+    if (parts.length >= 3 && parts.first.trim() == 'Khác') {
+      final detail = parts.take(2).join(separator).trim();
+      final noteText = parts.skip(2).join(separator).trim();
+      return _TransactionNoteParts(detail: detail, note: noteText);
+    }
+
+    final detail = parts.first.trim();
+    final noteText = parts.skip(1).join(separator).trim();
+    return _TransactionNoteParts(detail: detail, note: noteText);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -296,6 +323,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     final walletName = wallet.isNotEmpty
         ? wallet.first.name
         : 'Ví không xác định';
+    final noteParts = _parseTransactionNote(transaction.note);
 
     showModalBottomSheet(
       context: context,
@@ -317,6 +345,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 const SizedBox(height: AppSpacing.sm),
                 Text('Danh mục: ${category?.name ?? 'Không xác định'}'),
                 const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Chi tiết danh mục: ${noteParts.detail ?? '(Trống)'}',
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 Text('Ví: $walletName'),
                 const SizedBox(height: AppSpacing.sm),
                 Text('Số tiền: ${AppCurrency.format(transaction.amount)}'),
@@ -326,7 +358,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Ghi chú: ${transaction.note?.isNotEmpty == true ? transaction.note : '(Trống)'}',
+                  'Ghi chú: ${noteParts.note ?? '(Trống)'}',
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text('Đính kèm: ${transaction.attachments.length} tệp'),
@@ -697,4 +729,13 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
     return payload;
   }
+}
+
+class _TransactionNoteParts {
+  final String? detail;
+  final String? note;
+
+  const _TransactionNoteParts({String? detail, String? note})
+    : detail = (detail != null && detail != '') ? detail : null,
+      note = (note != null && note != '') ? note : null;
 }
