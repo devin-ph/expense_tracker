@@ -57,6 +57,38 @@ class SpendingLimitNotifier extends ChangeNotifier {
               (doc) => SpendingLimit.fromJson({...doc.data(), 'id': doc.id}),
             ),
           );
+
+        final defaultByCategory = {
+          for (final item in _buildDefaultLimits(userId))
+            item.categoryId: item.limitAmount,
+        };
+        final migrated = <SpendingLimit>[];
+        final migrationTime = DateTime.now();
+
+        for (var i = 0; i < local.length; i++) {
+          final current = local[i];
+          if (current.limitAmount > 0) continue;
+
+          final fallbackAmount = defaultByCategory[current.categoryId];
+          if (fallbackAmount == null || fallbackAmount <= 0) continue;
+
+          final fixed = current.copyWith(
+            limitAmount: fallbackAmount,
+            lastResetAt: current.lastResetAt ?? current.updatedAt,
+            updatedAt: migrationTime,
+          );
+          local[i] = fixed;
+          migrated.add(fixed);
+        }
+
+        for (final limit in migrated) {
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('spending_limits')
+              .doc(limit.id)
+              .set(limit.toJson());
+        }
       }
     } catch (_) {
       if (local.isEmpty) {
@@ -117,9 +149,17 @@ class SpendingLimitNotifier extends ChangeNotifier {
   }
 
   void updateLimit(SpendingLimit limit) {
-    final index = _limits.indexWhere((l) => l.id == limit.id);
+    var index = _limits.indexWhere((l) => l.id == limit.id);
+    if (index == -1) {
+      index = _limits.indexWhere(
+        (l) =>
+            l.categoryId == limit.categoryId &&
+            (_currentUserId == null || l.userId == _currentUserId),
+      );
+    }
+
     if (index != -1) {
-      _limits[index] = limit;
+      _limits = List<SpendingLimit>.from(_limits)..[index] = limit;
       if (_currentUserId != null) {
         _limitStore[_currentUserId!] = _limits;
         _firestore
@@ -157,7 +197,7 @@ class SpendingLimitNotifier extends ChangeNotifier {
 
   double getProgressPercentage(String categoryId, double spent) {
     final limit = getLimitByCategoryId(categoryId);
-    if (limit == null) return 0;
+    if (limit == null || limit.limitAmount <= 0) return 0;
     return (spent / limit.limitAmount) * 100;
   }
 }

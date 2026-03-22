@@ -11,13 +11,13 @@ class SpendingProgressBar extends StatelessWidget {
   final VoidCallback? onTap;
 
   const SpendingProgressBar({
-    Key? key,
+    super.key,
     required this.spent,
     required this.limit,
     required this.categoryName,
     this.categoryIcon,
     this.onTap,
-  }) : super(key: key);
+  });
 
   Color _getProgressColor(double percentage) {
     if (percentage < 50) {

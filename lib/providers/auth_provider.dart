@@ -239,8 +239,8 @@ class AuthNotifier extends ChangeNotifier {
 
       // Update in Firestore
       await _firestore.collection('users').doc(_currentUser!.id).update({
-        if (name != null) 'name': name,
-        if (photoUrl != null) 'photoUrl': photoUrl,
+        'name': ?name,
+        'photoUrl': ?photoUrl,
       });
 
       _currentUser = updated;

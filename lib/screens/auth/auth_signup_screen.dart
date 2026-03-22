@@ -5,7 +5,7 @@ import '../../config/constants.dart';
 
 /// Signup Screen
 class AuthSignupScreen extends StatefulWidget {
-  const AuthSignupScreen({Key? key}) : super(key: key);
+  const AuthSignupScreen({super.key});
 
   @override
   State<AuthSignupScreen> createState() => _AuthSignupScreenState();

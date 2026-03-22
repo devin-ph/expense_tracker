@@ -16,11 +16,11 @@ class TransactionsScreen extends StatefulWidget {
   final int initialTabIndex;
 
   const TransactionsScreen({
-    Key? key,
+    super.key,
     this.onTypeChanged,
     this.onTabIndexChanged,
     this.initialTabIndex = 0,
-  }) : super(key: key);
+  });
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -615,7 +615,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     DropdownButtonFormField<TransactionType>(
-                      value: selectedType,
+                      initialValue: selectedType,
                       decoration: const InputDecoration(
                         labelText: 'Loại giao dịch',
                       ),
@@ -648,7 +648,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     DropdownButtonFormField<String>(
-                      value: selectedWalletId,
+                      initialValue: selectedWalletId,
                       decoration: const InputDecoration(labelText: 'Ví'),
                       items: wallets
                           .map(
@@ -663,7 +663,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     DropdownButtonFormField<String>(
-                      value: selectedCategoryId,
+                      initialValue: selectedCategoryId,
                       decoration: const InputDecoration(labelText: 'Danh mục'),
                       items: categories
                           .map(

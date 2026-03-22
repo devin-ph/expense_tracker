@@ -3,6 +3,7 @@ class SpendingLimit {
   final String userId;
   final String categoryId;
   final double limitAmount;
+  final DateTime? lastResetAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -11,6 +12,7 @@ class SpendingLimit {
     required this.userId,
     required this.categoryId,
     required this.limitAmount,
+    this.lastResetAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -20,6 +22,7 @@ class SpendingLimit {
     String? userId,
     String? categoryId,
     double? limitAmount,
+    DateTime? lastResetAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -28,6 +31,7 @@ class SpendingLimit {
       userId: userId ?? this.userId,
       categoryId: categoryId ?? this.categoryId,
       limitAmount: limitAmount ?? this.limitAmount,
+      lastResetAt: lastResetAt ?? this.lastResetAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -39,6 +43,9 @@ class SpendingLimit {
       userId: json['userId'] as String,
       categoryId: json['categoryId'] as String,
       limitAmount: (json['limitAmount'] as num).toDouble(),
+      lastResetAt: json['lastResetAt'] != null
+          ? DateTime.parse(json['lastResetAt'] as String)
+          : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -50,6 +57,7 @@ class SpendingLimit {
       'userId': userId,
       'categoryId': categoryId,
       'limitAmount': limitAmount,
+      'lastResetAt': lastResetAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
