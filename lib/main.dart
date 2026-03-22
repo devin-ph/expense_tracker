@@ -79,6 +79,7 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
+  int _transactionsTabIndex = 0;
   TransactionType _activeTransactionType = TransactionType.income;
   String? _syncedUserId;
 

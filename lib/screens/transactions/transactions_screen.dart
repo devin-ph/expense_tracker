@@ -29,6 +29,8 @@ class TransactionsScreen extends StatefulWidget {
 class _TransactionsScreenState extends State<TransactionsScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
+  int _currentTabIndex = 0;
+  TransactionType? _lastReportedType;
   TransactionType?
   _selectedFilter; // null = all, income = income, expense = expense
 
@@ -37,7 +39,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     super.initState();
     _startDate = DateTime.now().subtract(const Duration(days: 30));
     _endDate = DateTime.now();
+    _currentTabIndex = widget.initialTabIndex.clamp(0, 1);
     _selectedFilter = null; // Show all by default
+    _reportCurrentType();
   }
 
   void _handleTabChanged() {
@@ -48,8 +52,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   void _reportCurrentType() {
-    widget.onTabIndexChanged?.call(_tabController.index);
-    final currentType = _tabController.index == 0
+    final effectiveIndex = _selectedFilter == TransactionType.income
+        ? 0
+        : _selectedFilter == TransactionType.expense
+        ? 1
+        : _currentTabIndex;
+    widget.onTabIndexChanged?.call(effectiveIndex);
+    final currentType = effectiveIndex == 0
         ? TransactionType.income
         : TransactionType.expense;
     if (_lastReportedType == currentType) {
@@ -190,8 +199,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     return GestureDetector(
       onTap: () {
         setState(() {
-          _selectedFilter = isSelected ? null : type;
+          final nextFilter = isSelected ? null : type;
+          _selectedFilter = nextFilter;
+          if (nextFilter != null) {
+            _currentTabIndex = nextFilter == TransactionType.income ? 0 : 1;
+          }
         });
+        _reportCurrentType();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(
@@ -315,12 +329,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               attachments: transaction.attachments,
               dateTime: transaction.date,
               isIncome: transaction.type == TransactionType.income,
-              onTap: () {
-                // Show transaction details
-              },
-              onLongPress: () {
-                // Delete or edit
-              },
+              onTap: () => _showTransactionDetail(transaction),
+              onLongPress: () => _showEditTransactionSheet(transaction),
             );
           },
         );
@@ -766,6 +776,38 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     } catch (_) {}
 
     return payload;
+  }
+
+  _TransactionNoteParts _parseTransactionNote(String? rawNote) {
+    if (rawNote == null || rawNote.trim().isEmpty) {
+      return const _TransactionNoteParts();
+    }
+
+    final note = rawNote.trim();
+    try {
+      final decoded = jsonDecode(note);
+      if (decoded is Map<String, dynamic>) {
+        return _TransactionNoteParts(
+          detail: (decoded['detail'] as String?)?.trim(),
+          note:
+              (decoded['note'] as String?)?.trim() ??
+              (decoded['content'] as String?)?.trim(),
+        );
+      }
+    } catch (_) {
+      // Fallback for legacy plain text notes.
+    }
+
+    if (note.contains('|')) {
+      final parts = note.split('|');
+      final detail = parts.isNotEmpty ? parts.first.trim() : null;
+      final content = parts.length > 1
+          ? parts.sublist(1).join('|').trim()
+          : null;
+      return _TransactionNoteParts(detail: detail, note: content);
+    }
+
+    return _TransactionNoteParts(note: note);
   }
 }
 
