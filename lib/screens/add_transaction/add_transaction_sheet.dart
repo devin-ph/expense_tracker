@@ -121,6 +121,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool _isPickingAttachment = false;
   bool _isLoading = false;
   bool _showValidationErrors = false;
+  bool _hasSelectedAmountSuggestion = false;
 
   void _handleAmountFocusChange() {
     if (!mounted) return;
@@ -358,7 +359,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final suggestionMax = _transactionType == TransactionType.income
       ? 100000000
       : suggestionLimit;
-    final suggestions = currentAmount > 0
+    final suggestions = !_hasSelectedAmountSuggestion && currentAmount > 0
         ? _buildZeroExpandedSuggestions(
             currentAmount,
         minAmount: suggestionMin,
@@ -485,6 +486,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       onSelected: (_) {
         setState(() {
           _amountController.text = _formatAmount(amount.toString());
+          _hasSelectedAmountSuggestion = true;
         });
       },
       backgroundColor: _transactionType == TransactionType.income
