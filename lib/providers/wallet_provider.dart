@@ -113,18 +113,26 @@ class WalletNotifier extends ChangeNotifier {
   }
 
   void addWallet(Wallet wallet) {
-    if (_currentUserId == null) return;
-    final scoped = wallet.userId == _currentUserId
+    final currentUserId = _currentUserId;
+    if (currentUserId == null || currentUserId.isEmpty) return;
+
+    final scoped = wallet.userId == currentUserId
         ? wallet
-        : wallet.copyWith(userId: _currentUserId);
+        : wallet.copyWith(userId: currentUserId);
+    if (scoped.id.isEmpty) return;
+
     _wallets.add(scoped);
-    _walletStore[_currentUserId!] = _wallets;
-    _firestore
-        .collection('users')
-        .doc(_currentUserId)
-        .collection('wallets')
-        .doc(scoped.id)
-        .set(scoped.toJson());
+    _walletStore[currentUserId] = _wallets;
+    try {
+      _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('wallets')
+          .doc(scoped.id)
+          .set(scoped.toJson());
+    } catch (_) {
+      // Keep local state usable even if remote write fails in debug/runtime.
+    }
     notifyListeners();
   }
 

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../../models/index.dart';
 import '../../providers/index.dart';
 import '../../config/constants.dart';
@@ -15,6 +16,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final _uuid = const Uuid();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -237,7 +240,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: () {
-                  // Add wallet
+                  _showAddWalletDialog(context);
                 },
               ),
             ],
@@ -252,24 +255,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 itemCount: wallets.length,
                 itemBuilder: (context, index) {
                   final wallet = wallets[index];
+                  final canDelete = wallets.length > 1;
                   return Card(
                     margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: ListTile(
                       title: Text(wallet.name),
                       subtitle: Text(AppCurrency.format(wallet.balance)),
-                      trailing: PopupMenuButton(
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'edit') {
+                            _showEditWalletDialog(context, wallet);
+                            return;
+                          }
+
+                          if (!canDelete) {
+                            return;
+                          }
+
+                          final shouldDelete =
+                              await _showDeleteWalletConfirmDialog(
+                                context,
+                                wallet.name,
+                              );
+                          if (!shouldDelete || !mounted) {
+                            return;
+                          }
+
+                          walletNotifier.deleteWallet(wallet.id);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Đã xóa ví')),
+                          );
+                        },
                         itemBuilder: (context) => [
-                          PopupMenuItem(
-                            child: const Text('Chỉnh sửa'),
-                            onTap: () {
-                              // Edit wallet
-                            },
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Text('Chỉnh sửa'),
                           ),
-                          PopupMenuItem(
-                            child: const Text('Xóa'),
-                            onTap: () {
-                              walletNotifier.deleteWallet(wallet.id);
-                            },
+                          PopupMenuItem<String>(
+                            value: 'delete',
+                            enabled: canDelete,
+                            child: Text(
+                              canDelete ? 'Xóa' : 'Xóa (cần ít nhất 2 ví)',
+                            ),
                           ),
                         ],
                       ),
@@ -404,7 +431,282 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _showAddWalletDialog(BuildContext context) async {
+    final user = context.read<AuthNotifier>().currentUser;
+    if (user == null || user.id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không xác định được tài khoản hiện tại')),
+      );
+      return;
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final balanceController = TextEditingController(text: '0');
+    final messenger = ScaffoldMessenger.of(context);
+    final walletNotifier = context.read<WalletNotifier>();
+
+    final result = await showDialog<_AddWalletResult>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Thêm ví mới'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên ví',
+                    hintText: 'Ví tiền mặt',
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').trim().isEmpty) {
+                      return 'Vui lòng nhập tên ví';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: balanceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'Số dư ban đầu'),
+                  validator: (value) {
+                    final parsed = double.tryParse(
+                      (value ?? '').replaceAll(',', '').trim(),
+                    );
+                    if (parsed == null) {
+                      return 'Số dư không hợp lệ';
+                    }
+                    if (parsed < 0) {
+                      return 'Số dư phải >= 0';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) {
+                  return;
+                }
+                final parsedBalance = double.parse(
+                  balanceController.text.replaceAll(',', '').trim(),
+                );
+                Navigator.pop(
+                  dialogContext,
+                  _AddWalletResult(
+                    name: nameController.text.trim(),
+                    balance: parsedBalance,
+                  ),
+                );
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null || !mounted) {
+      nameController.dispose();
+      balanceController.dispose();
+      return;
+    }
+
+    try {
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
+
+      walletNotifier.addWallet(
+        Wallet(
+          id: _uuid.v4(),
+          userId: user.id,
+          name: result.name,
+          balance: result.balance,
+          createdAt: DateTime.now(),
+          isDefault: walletNotifier.wallets.isEmpty,
+        ),
+      );
+    } catch (e) {
+      nameController.dispose();
+      balanceController.dispose();
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Lưu ví thất bại: $e')));
+      return;
+    }
+
+    nameController.dispose();
+    balanceController.dispose();
+
+    messenger.showSnackBar(const SnackBar(content: Text('Đã thêm ví mới')));
+  }
+
+  Future<void> _showEditWalletDialog(
+    BuildContext context,
+    Wallet wallet,
+  ) async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: wallet.name);
+    final balanceController = TextEditingController(
+      text: wallet.balance.toStringAsFixed(0),
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    final walletNotifier = context.read<WalletNotifier>();
+
+    final result = await showDialog<_AddWalletResult>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Chỉnh sửa ví'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên ví',
+                    hintText: 'Ví tiền mặt',
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').trim().isEmpty) {
+                      return 'Vui lòng nhập tên ví';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: balanceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Số dư hiện tại',
+                  ),
+                  validator: (value) {
+                    final parsed = double.tryParse(
+                      (value ?? '').replaceAll(',', '').trim(),
+                    );
+                    if (parsed == null) {
+                      return 'Số dư không hợp lệ';
+                    }
+                    if (parsed < 0) {
+                      return 'Số dư phải >= 0';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) {
+                  return;
+                }
+                final parsedBalance = double.parse(
+                  balanceController.text.replaceAll(',', '').trim(),
+                );
+                Navigator.pop(
+                  dialogContext,
+                  _AddWalletResult(
+                    name: nameController.text.trim(),
+                    balance: parsedBalance,
+                  ),
+                );
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null || !mounted) {
+      nameController.dispose();
+      balanceController.dispose();
+      return;
+    }
+
+    try {
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
+
+      walletNotifier.updateWallet(
+        wallet.copyWith(name: result.name, balance: result.balance),
+      );
+    } catch (e) {
+      nameController.dispose();
+      balanceController.dispose();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Cập nhật ví thất bại: $e')),
+      );
+      return;
+    }
+
+    nameController.dispose();
+    balanceController.dispose();
+
+    messenger.showSnackBar(const SnackBar(content: Text('Đã cập nhật ví')));
+  }
+
+  Future<bool> _showDeleteWalletConfirmDialog(
+    BuildContext context,
+    String walletName,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Xác nhận xóa ví'),
+          content: Text('Bạn có chắc muốn xóa ví "$walletName" không?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Xóa'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
+}
+
+class _AddWalletResult {
+  final String name;
+  final double balance;
+
+  const _AddWalletResult({required this.name, required this.balance});
 }
