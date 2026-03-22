@@ -42,6 +42,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      fontFamilyFallback: const ['NotoSans', 'NotoColorEmoji'],
       colorScheme: const ColorScheme.light(
         primary: primaryColor,
         secondary: secondaryColor,
@@ -191,6 +192,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      fontFamilyFallback: const ['NotoSans', 'NotoColorEmoji'],
       colorScheme: const ColorScheme.dark(
         primary: primaryColor,
         secondary: secondaryColor,

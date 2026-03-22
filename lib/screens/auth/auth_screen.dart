@@ -202,7 +202,9 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -221,7 +223,9 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 }

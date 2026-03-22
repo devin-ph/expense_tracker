@@ -873,8 +873,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 _,
               ) {
                 final walletId = walletNotifier.selectedWallet?.id;
-                final todayTransactions = transactionNotifier
-                    .getTodayTransactions(walletId: walletId);
+                final todayTransactions =
+                    transactionNotifier.getTodayTransactions(walletId: walletId)
+                      ..sort((a, b) => b.date.compareTo(a.date));
 
                 if (todayTransactions.isEmpty) {
                   return Padding(
