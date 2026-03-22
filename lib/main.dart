@@ -75,6 +75,7 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
   TransactionType _activeTransactionType = TransactionType.income;
+  int _transactionsTabIndex = 0;
 
   @override
   void initState() {
@@ -124,8 +125,15 @@ class _MainAppState extends State<MainApp> {
         );
       case 1:
         return TransactionsScreen(
+          initialTabIndex: _transactionsTabIndex,
+          onTabIndexChanged: (index) {
+            _transactionsTabIndex = index;
+          },
           onTypeChanged: (type) {
-            _activeTransactionType = type;
+            if (_activeTransactionType == type) return;
+            setState(() {
+              _activeTransactionType = type;
+            });
           },
         );
       case 2:
@@ -234,9 +242,11 @@ class _MainAppState extends State<MainApp> {
         ),
         child: AddTransactionSheet(
           initialType: isTransactionsTab
-              ? _activeTransactionType
-              : TransactionType.expense,
-          lockTransactionType: isTransactionsTab,
+            ? (_transactionsTabIndex == 0
+              ? TransactionType.income
+              : TransactionType.expense)
+            : TransactionType.expense,
+          lockTransactionType: false,
           onTransactionAdded: () {
             setState(() {});
           },
