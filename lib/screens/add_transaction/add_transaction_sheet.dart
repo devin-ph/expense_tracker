@@ -122,9 +122,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool _isLoading = false;
   bool _showValidationErrors = false;
 
+  void _handleAmountFocusChange() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   bool get _isOtherExpenseSelected =>
       _transactionType == TransactionType.expense &&
       _selectedExpenseOption == 'Khác';
+
+    bool get _isOtherIncomeSelected =>
+      _transactionType == TransactionType.income &&
+      _selectedIncomeOption == 'Khác';
 
   _AttachmentMeta _parseAttachmentMeta(_AttachmentItem attachment) {
     try {
@@ -164,6 +173,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _noteController = TextEditingController();
     _otherExpenseController = TextEditingController();
     _amountFocusNode = FocusNode();
+    _amountFocusNode.addListener(_handleAmountFocusChange);
     _selectedDate = DateTime.now();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -179,6 +189,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _amountController.dispose();
     _noteController.dispose();
     _otherExpenseController.dispose();
+    _amountFocusNode.removeListener(_handleAmountFocusChange);
     _amountFocusNode.dispose();
     super.dispose();
   }
@@ -360,44 +371,80 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       children: [
         Text('Số tiền', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.md),
-        TextFormField(
-          controller: _amountController,
-          focusNode: _amountFocusNode,
-          keyboardType: TextInputType.number,
-          style: Theme.of(context).textTheme.headlineSmall,
-          textAlign: TextAlign.center,
-          decoration: InputDecoration(
-            hintText: '0',
-            filled: true,
-            fillColor: _transactionType == TransactionType.income
-                ? Colors.green.withOpacity(0.05)
-                : Colors.red.withOpacity(0.05),
-            suffixText: '₫',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            TextFormField(
+              controller: _amountController,
+              focusNode: _amountFocusNode,
+              keyboardType: TextInputType.number,
+              style: Theme.of(context).textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+              decoration: InputDecoration(
+                hintText: '',
+                filled: true,
+                fillColor: _transactionType == TransactionType.income
+                    ? Colors.green.withOpacity(0.05)
+                    : Colors.red.withOpacity(0.05),
+                suffixText: 'đ',
+                suffixStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  decoration: TextDecoration.none,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 19,
+                ),
+                errorStyle: const TextStyle(height: 0, fontSize: 0),
+                // Keep the caret slightly to the right of the fixed centered hint when focused.
+                prefixIcon: _amountFocusNode.hasFocus &&
+                        _amountController.text.isEmpty
+                    ? const SizedBox(width: AppSpacing.xxl)
+                    : null,
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 0,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                ),
+              ),
+              validator: _validateAmountField,
+              onChanged: (value) {
+                if (value.isNotEmpty) {
+                  final numericValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                  final formatted = _formatAmount(numericValue);
+                  setState(() {
+                    _amountController.value = TextEditingValue(
+                      text: formatted,
+                      selection: TextSelection.fromPosition(
+                        TextPosition(offset: formatted.length),
+                      ),
+                    );
+                  });
+                } else {
+                  setState(() {
+                    _amountController.value = const TextEditingValue(text: '');
+                  });
+                }
+              },
             ),
-          ),
-          validator: _validateAmountField,
-          onChanged: (value) {
-            if (value.isNotEmpty) {
-              final numericValue = value.replaceAll(RegExp(r'[^\d]'), '');
-              final formatted = _formatAmount(numericValue);
-              setState(() {
-                _amountController.value = TextEditingValue(
-                  text: formatted,
-                  selection: TextSelection.fromPosition(
-                    TextPosition(offset: formatted.length),
+            if (_amountController.text.isEmpty)
+              IgnorePointer(
+                child: Text(
+                  '0',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
-                );
-              });
-            } else {
-              setState(() {
-                _amountController.value = const TextEditingValue(text: '');
-              });
-            }
-          },
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: AppSpacing.md),
+        if (_showValidationErrors && _hasAmountError)
+          _buildValidationErrorText(
+            _validateAmountField(_amountController.text) ??
+                'Vui lòng nhập số tiền',
+          ),
         // Quick amount suggestions (pills)
         if (suggestions.isNotEmpty)
           Wrap(
@@ -560,7 +607,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: hasSelectedOption ? _selectedIncomeOption : null,
-                  hint: const Text('Chọn chi tiết danh mục thu nhập'),
+                  hint: const Text('Chọn chi tiết danh mục'),
                   items: selectedOptions.map<DropdownMenuItem<String>>((option) {
                     return DropdownMenuItem<String>(
                       value: option,
@@ -569,10 +616,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   }).toList(),
                   onChanged: selectedCategoryId == null || selectedOptions.isEmpty
                       ? null
-                      : (value) {
+                      : (value) async {
                           if (value == null) return;
+                          if (value == 'Khác') {
+                            final confirmed = await _promptOtherExpenseDetail(
+                              isIncome: true,
+                            );
+                            if (!confirmed || !mounted) return;
+                          }
                           setState(() {
                             _selectedIncomeOption = value;
+                            if (value != 'Khác') {
+                              _otherExpenseController.clear();
+                            }
                           });
                         },
                 ),
@@ -1020,18 +1076,29 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     );
   }
 
-  Future<bool> _promptOtherExpenseDetail() async {
+  Future<bool> _promptOtherExpenseDetail({bool isIncome = false}) async {
+    final title = isIncome
+        ? 'Nhập thông tin thu nhập khác'
+        : 'Nhập thông tin chi tiêu khác';
+    final hint = isIncome
+        ? 'Ví dụ: Thu nhập freelance phát sinh'
+        : 'Ví dụ: Mua đồ gia dụng phát sinh';
+    final emptyMessage = isIncome
+        ? 'Vui lòng nhập thông tin thu nhập'
+        : 'Vui lòng nhập thông tin chi tiêu';
+
+    final rootContext = context;
     final result = await showDialog<String>(
-      context: context,
+      context: rootContext,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Nhập thông tin chi tiêu khác'),
+          title: Text(title),
           content: TextField(
             controller: _otherExpenseController,
             autofocus: true,
             maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Ví dụ: Mua đồ gia dụng phát sinh',
+            decoration: InputDecoration(
+              hintText: hint,
             ),
           ),
           actions: [
@@ -1043,11 +1110,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               onPressed: () {
                 final value = _otherExpenseController.text.trim();
                 if (value.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Vui lòng nhập thông tin chi tiêu'),
-                    ),
-                  );
+                  final messenger = ScaffoldMessenger.maybeOf(rootContext);
+                  messenger?.showSnackBar(SnackBar(content: Text(emptyMessage)));
                   return;
                 }
                 Navigator.pop(dialogContext, value);
@@ -1149,7 +1213,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -1159,8 +1225,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       return;
     }
 
-    if (_hasOtherExpenseError) {
-      await _promptOtherExpenseDetail();
+    if (_hasOtherDetailError) {
+      await _promptOtherExpenseDetail(isIncome: _isOtherIncomeSelected);
     }
   }
 
@@ -1202,8 +1268,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     return _selectedIncomeOption == null || _selectedIncomeOption!.trim().isEmpty;
   }
 
-  bool get _hasOtherExpenseError =>
-      _isOtherExpenseSelected && _otherExpenseController.text.trim().isEmpty;
+    bool get _hasOtherDetailError =>
+      (_isOtherExpenseSelected || _isOtherIncomeSelected) &&
+      _otherExpenseController.text.trim().isEmpty;
 
   String? _validateAmountField(String? _) {
     final normalizedAmountText = _amountController.text.replaceAll(
@@ -1259,8 +1326,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       return 'Vui lòng chọn chi tiết danh mục thu nhập';
     }
 
-    if (_hasOtherExpenseError) {
-      return 'Vui lòng nhập thông tin chi tiêu';
+    if (_hasOtherDetailError) {
+      return _isOtherIncomeSelected
+          ? 'Vui lòng nhập thông tin thu nhập'
+          : 'Vui lòng nhập thông tin chi tiêu';
     }
 
     return null;
@@ -1272,6 +1341,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     if (_transactionType == TransactionType.income) {
       if (_selectedIncomeOption == null || _selectedIncomeOption!.isEmpty) {
         return rawNote;
+      }
+
+      if (_selectedIncomeOption == 'Khác') {
+        if (rawNote.isEmpty) {
+          return 'Khác - $otherExpenseDetail';
+        }
+        return 'Khác - $otherExpenseDetail - $rawNote';
       }
 
       if (rawNote.isEmpty) {
@@ -1300,6 +1376,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   void _showAddCategoryDialog() {
+    final rootContext = context;
     final nameController = TextEditingController();
     String selectedIcon = '💰';
     TransactionType selectedType = _transactionType;
@@ -1330,9 +1407,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     ];
 
     showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+      context: rootContext,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
           title: const Text('Thêm danh mục mới'),
           content: SingleChildScrollView(
             child: Column(
@@ -1342,7 +1419,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 // Icon selector
                 Text(
                   'Biểu tượng',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: Theme.of(dialogContext).textTheme.titleSmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Wrap(
@@ -1351,14 +1428,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   children: commonIcons
                       .map(
                         (icon) => GestureDetector(
-                          onTap: () => setState(() => selectedIcon = icon),
+                          onTap: () => setDialogState(() => selectedIcon = icon),
                           child: Container(
                             width: 50,
                             height: 50,
                             decoration: BoxDecoration(
                               border: Border.all(
                                 color: selectedIcon == icon
-                                    ? Theme.of(context).primaryColor
+                                    ? Theme.of(dialogContext).primaryColor
                                     : Colors.grey.withOpacity(0.3),
                                 width: selectedIcon == icon ? 2 : 1,
                               ),
@@ -1381,7 +1458,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 // Name input
                 Text(
                   'Tên danh mục',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: Theme.of(dialogContext).textTheme.titleSmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
@@ -1395,7 +1472,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 // Type selector
-                Text('Loại', style: Theme.of(context).textTheme.titleSmall),
+                Text('Loại', style: Theme.of(dialogContext).textTheme.titleSmall),
                 const SizedBox(height: AppSpacing.md),
                 Row(
                   children: [
@@ -1405,7 +1482,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         TransactionType.income,
                         Colors.green,
                         selectedType,
-                        () => setState(
+                        () => setDialogState(
                           () => selectedType = TransactionType.income,
                         ),
                       ),
@@ -1417,7 +1494,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         TransactionType.expense,
                         Colors.red,
                         selectedType,
-                        () => setState(
+                        () => setDialogState(
                           () => selectedType = TransactionType.expense,
                         ),
                       ),
@@ -1429,14 +1506,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Hủy'),
             ),
             ElevatedButton(
               onPressed: isLoading || nameController.text.isEmpty
                   ? null
                   : () async {
-                      setState(() => isLoading = true);
+                      setDialogState(() => isLoading = true);
                       try {
                         final newCategory = Category(
                           id: const Uuid().v4(),
@@ -1447,17 +1524,17 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           createdAt: DateTime.now(),
                         );
 
-                        context.read<CategoryNotifier>().addCategory(
+                        rootContext.read<CategoryNotifier>().addCategory(
                           newCategory,
                         );
 
                         if (mounted) {
-                          this.setState(
+                          setState(
                             () => _selectedCategoryId = newCategory.id,
                           );
-                          Navigator.pop(context);
+                          Navigator.pop(dialogContext);
                           // Show success message
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
                             const SnackBar(
                               content: Text('Danh mục đã được thêm'),
                               duration: Duration(seconds: 1),
@@ -1467,7 +1544,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(
-                            context,
+                            rootContext,
                           ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
                         }
                       }
