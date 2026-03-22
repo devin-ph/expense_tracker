@@ -27,6 +27,50 @@ class TransactionsScreen extends StatefulWidget {
 }
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
+  static const Map<String, List<String>> _expenseCategoryOptions = {
+    'cat1': [
+      'Tiền thuê nhà/ Trả góp mua nhà',
+      'Điện, nước, internet, truyền hình',
+      'Phí bảo hiểm (y tế, xe, nhà)',
+      'Học phí/ Phí dịch vụ định kỳ',
+      'Thẻ tín dụng',
+      'Khác',
+    ],
+    'cat2': [
+      'Thực phẩm, nhu yếu phẩm',
+      'Xăng xe, vé xe buýt...',
+      'Quần áo cơ bản, giày dép',
+      'Khám sức khỏe định kỳ',
+      'Dụng cụ sinh hoạt',
+      'Khác',
+    ],
+    'cat3': [
+      'Quà tặng cho bạn bè/người thân',
+      'Tiệc cưới, sinh nhật, lễ hội',
+      'Sửa chữa đồ dùng hỏng hóc',
+      'Đóng góp xã hội, từ thiện',
+      'Khác',
+    ],
+    'cat4': [
+      'Chi phí y tế khẩn cấp',
+      'Hỗ trợ tài chính cho người thân',
+      'Thiên tai hoặc sự cố bất khả kháng',
+      'Khác',
+    ],
+    'cat5': [
+      'Ăn uống ngoài, cà phê',
+      'Du lịch, nghỉ dưỡng',
+      'Mua sắm',
+      'Giải trí: xem phim, concert, thể thao...',
+      'Sở thích cá nhân',
+      'Khác',
+    ],
+  };
+  static const Map<String, List<String>> _incomeCategoryOptions = {
+    'cat_income': ['Lương tháng', 'Lương làm thêm', 'Phụ cấp', 'Khác'],
+    'cat_bonus': ['Thưởng hiệu suất', 'Thưởng lễ/tết', 'Hoa hồng', 'Khác'],
+  };
+
   static const Set<String> _knownCategoryDetailOptions = {
     'Tiền thuê nhà/ Trả góp mua nhà',
     'Điện, nước, internet, truyền hình',
@@ -575,6 +619,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     String amountInput = transaction.amount.toStringAsFixed(0);
     String categoryDetailInput = noteParts.detail ?? '';
     String noteInput = noteParts.note ?? '';
+    String? otherDetailInput;
 
     TransactionType selectedType = transaction.type;
     String? selectedWalletId = transaction.walletId;
@@ -677,14 +722,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           setSheetState(() => selectedCategoryId = value),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    TextFormField(
-                      initialValue: categoryDetailInput,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Chi tiết danh mục',
-                        hintText: 'VD: Thưởng lễ/tết',
-                      ),
-                      onChanged: (value) => categoryDetailInput = value,
+                    _buildEditCategoryDetailSelection(
+                      selectedType,
+                      selectedCategoryId,
+                      categoryDetailInput,
+                      (value) => setSheetState(() => categoryDetailInput = value),
+                      (custom) => setSheetState(() => otherDetailInput = custom),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     TextFormField(
@@ -746,13 +789,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             return;
                           }
 
+                          final finalCategoryDetail = _buildFinalCategoryDetail(
+                            categoryDetailInput,
+                            otherDetailInput,
+                          );
                           final updated = transaction.copyWith(
                             type: selectedType,
                             amount: parsedAmount,
                             walletId: selectedWalletId,
                             categoryId: selectedCategoryId,
                             note: _composeEditedTransactionNote(
-                              categoryDetail: categoryDetailInput,
+                              categoryDetail: finalCategoryDetail,
                               note: noteInput,
                             ),
                             date: selectedDate,
@@ -860,6 +907,97 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
 
     return '$detailValue - $noteValue';
+  }
+
+  String _buildFinalCategoryDetail(
+    String selectedDetail,
+    String? otherDetail,
+  ) {
+    final detail = selectedDetail.trim();
+    if (detail == 'Khác' && otherDetail != null && otherDetail.isNotEmpty) {
+      return 'Khác - ${otherDetail.trim()}';
+    }
+    return detail;
+  }
+
+  Widget _buildEditCategoryDetailSelection(
+    TransactionType transactionType,
+    String? categoryId,
+    String currentDetail,
+    Function(String) onDetailChanged,
+    Function(String?) onOtherDetailChanged,
+  ) {
+    if (categoryId == null) {
+      return const SizedBox.shrink();
+    }
+
+    final detailOptions = transactionType == TransactionType.expense
+        ? (_expenseCategoryOptions[categoryId] ?? const <String>[])
+        : (_incomeCategoryOptions[categoryId] ?? const <String>[]);
+
+    if (detailOptions.isEmpty) {
+      return TextFormField(
+        initialValue: currentDetail,
+        maxLines: 2,
+        decoration: const InputDecoration(
+          labelText: 'Chi tiết danh mục',
+          hintText: 'Nhập chi tiết',
+        ),
+        onChanged: onDetailChanged,
+      );
+    }
+
+    final isOtherSelected = currentDetail == 'Khác';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(context).primaryColor.withOpacity(0.3),
+            ),
+            borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: detailOptions.contains(currentDetail)
+                  ? currentDetail
+                  : (isOtherSelected ? 'Khác' : null),
+              hint: const Text('Chọn chi tiết danh mục'),
+              items: detailOptions.map<DropdownMenuItem<String>>((option) {
+                return DropdownMenuItem<String>(
+                  value: option,
+                  child: Text(option),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  onDetailChanged(value);
+                  if (value != 'Khác') {
+                    onOtherDetailChanged(null);
+                  }
+                }
+              },
+            ),
+          ),
+        ),
+        if (isOtherSelected) ...[
+          const SizedBox(height: AppSpacing.md),
+          TextFormField(
+            initialValue: currentDetail != 'Khác' ? currentDetail : '',
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Chi tiết danh mục (tùy chỉnh)',
+              hintText: 'Nhập chi tiết khác',
+            ),
+            onChanged: onOtherDetailChanged,
+          ),
+        ],
+      ],
+    );
   }
 
   _TransactionNoteParts _parseTransactionNote(String? rawNote) {
