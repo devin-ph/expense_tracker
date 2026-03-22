@@ -116,7 +116,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                   controller: _nameController,
                   decoration: InputDecoration(
                     hintText: 'Nhập họ tên của bạn',
-                    prefixIcon: const Icon(Icons.person_outline),
+                    prefixIcon: const Icon(Icons.badge_outlined),
                   ),
                   onChanged: (_) => _clearError(),
                 ),
@@ -129,7 +129,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     hintText: 'Nhập email',
-                    prefixIcon: const Icon(Icons.email_outlined),
+                    prefixIcon: const Icon(Icons.alternate_email_rounded),
                   ),
                   onChanged: (_) => _clearError(),
                 ),
@@ -145,7 +145,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                   obscureText: !_isPasswordVisible,
                   decoration: InputDecoration(
                     hintText: 'Nhập mật khẩu (tối thiểu 6 ký tự)',
-                    prefixIcon: const Icon(Icons.lock_outlined),
+                    prefixIcon: const Icon(Icons.password_rounded),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordVisible
@@ -173,7 +173,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                   obscureText: !_isConfirmPasswordVisible,
                   decoration: InputDecoration(
                     hintText: 'Nhập lại mật khẩu',
-                    prefixIcon: const Icon(Icons.lock_outlined),
+                    prefixIcon: const Icon(Icons.verified_user_outlined),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isConfirmPasswordVisible
@@ -289,7 +289,9 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
         setState(() => _errorMessage = 'Lỗi: ${e.toString()}');
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 }

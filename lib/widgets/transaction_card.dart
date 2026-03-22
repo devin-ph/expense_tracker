@@ -22,12 +22,13 @@ class TransactionCard extends StatelessWidget {
     required this.categoryIcon,
     required this.amount,
     this.note,
-    this.attachments = const [],
+    List<String>? attachments,
     required this.dateTime,
     this.isIncome = false,
     this.onTap,
     this.onLongPress,
-  }) : super(key: key);
+  }) : attachments = attachments ?? const <String>[],
+       super(key: key);
 
   String _attachmentName(String payload) {
     try {
