@@ -27,6 +27,38 @@ class TransactionsScreen extends StatefulWidget {
 }
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
+  static const Set<String> _knownCategoryDetailOptions = {
+    'Tiền thuê nhà/ Trả góp mua nhà',
+    'Điện, nước, internet, truyền hình',
+    'Phí bảo hiểm (y tế, xe, nhà)',
+    'Học phí/ Phí dịch vụ định kỳ',
+    'Thẻ tín dụng',
+    'Thực phẩm, nhu yếu phẩm',
+    'Xăng xe, vé xe buýt...',
+    'Quần áo cơ bản, giày dép',
+    'Khám sức khỏe định kỳ',
+    'Dụng cụ sinh hoạt',
+    'Quà tặng cho bạn bè/người thân',
+    'Tiệc cưới, sinh nhật, lễ hội',
+    'Sửa chữa đồ dùng hỏng hóc',
+    'Đóng góp xã hội, từ thiện',
+    'Chi phí y tế khẩn cấp',
+    'Hỗ trợ tài chính cho người thân',
+    'Thiên tai hoặc sự cố bất khả kháng',
+    'Ăn uống ngoài, cà phê',
+    'Du lịch, nghỉ dưỡng',
+    'Mua sắm',
+    'Giải trí: xem phim, concert, thể thao...',
+    'Sở thích cá nhân',
+    'Lương tháng',
+    'Lương làm thêm',
+    'Phụ cấp',
+    'Thưởng hiệu suất',
+    'Thưởng lễ/tết',
+    'Hoa hồng',
+    'Khác',
+  };
+
   DateTime? _startDate;
   DateTime? _endDate;
   int _currentTabIndex = 0;
@@ -234,11 +266,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Widget _buildStatistics() {
-    return Consumer<TransactionNotifier>(
-      builder: (context, transactionNotifier, _) {
+    return Consumer2<TransactionNotifier, WalletNotifier>(
+      builder: (context, transactionNotifier, walletNotifier, _) {
+        final walletId = walletNotifier.selectedWallet?.id;
         final filtered = transactionNotifier.getTransactionsByDateRange(
           _startDate ?? DateTime.now(),
           _endDate ?? DateTime.now(),
+          walletId: walletId,
         );
 
         // Filter by selected type if applicable
@@ -288,11 +322,19 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Widget _buildTransactionList() {
-    return Consumer2<TransactionNotifier, CategoryNotifier>(
-      builder: (context, transactionNotifier, categoryNotifier, _) {
+    return Consumer3<TransactionNotifier, CategoryNotifier, WalletNotifier>(
+      builder: (
+        context,
+        transactionNotifier,
+        categoryNotifier,
+        walletNotifier,
+        _,
+      ) {
+        final walletId = walletNotifier.selectedWallet?.id;
         var filtered = transactionNotifier.getTransactionsByDateRange(
           _startDate ?? DateTime.now(),
           _endDate ?? DateTime.now(),
+          walletId: walletId,
         );
 
         // Filter by selected type if applicable
@@ -430,7 +472,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () {
                           Navigator.pop(sheetContext);
-                          _showEditTransactionSheet(transaction);
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              _showEditTransactionSheet(transaction);
+                            }
+                          });
                         },
                         icon: const Icon(Icons.edit_outlined),
                         label: const Text('Sửa'),
@@ -521,13 +567,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Future<void> _showEditTransactionSheet(Transaction transaction) async {
+    final parentContext = context;
+    final messenger = ScaffoldMessenger.maybeOf(parentContext);
     final wallets = context.read<WalletNotifier>().wallets;
     final categoryNotifier = context.read<CategoryNotifier>();
-
-    final amountController = TextEditingController(
-      text: transaction.amount.toStringAsFixed(0),
-    );
-    final noteController = TextEditingController(text: transaction.note ?? '');
+    final noteParts = _parseTransactionNote(transaction.note);
+    String amountInput = transaction.amount.toStringAsFixed(0);
+    String categoryDetailInput = noteParts.detail ?? '';
+    String noteInput = noteParts.note ?? '';
 
     TransactionType selectedType = transaction.type;
     String? selectedWalletId = transaction.walletId;
@@ -539,7 +586,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       isScrollControlled: true,
       builder: (sheetContext) {
         return StatefulBuilder(
-          builder: (context, setSheetState) {
+          builder: (modalContext, setSheetState) {
             final categories = categoryNotifier.getCategoriesByType(
               selectedType,
             );
@@ -555,7 +602,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   right: AppSpacing.lg,
                   top: AppSpacing.lg,
                   bottom:
-                      MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+                      MediaQuery.of(modalContext).viewInsets.bottom +
+                      AppSpacing.lg,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -563,7 +611,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   children: [
                     Text(
                       'Sửa giao dịch',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      style: Theme.of(parentContext).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     DropdownButtonFormField<TransactionType>(
@@ -593,9 +641,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     TextFormField(
-                      controller: amountController,
+                      initialValue: amountInput,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Số tiền'),
+                      onChanged: (value) => amountInput = value,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     DropdownButtonFormField<String>(
@@ -629,9 +678,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     TextFormField(
-                      controller: noteController,
+                      initialValue: categoryDetailInput,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Chi tiết danh mục',
+                        hintText: 'VD: Thưởng lễ/tết',
+                      ),
+                      onChanged: (value) => categoryDetailInput = value,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextFormField(
+                      initialValue: noteInput,
                       maxLines: 3,
                       decoration: const InputDecoration(labelText: 'Ghi chú'),
+                      onChanged: (value) => noteInput = value,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     ListTile(
@@ -643,7 +703,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       trailing: const Icon(Icons.calendar_today),
                       onTap: () async {
                         final picked = await showDatePicker(
-                          context: context,
+                          context: modalContext,
                           initialDate: selectedDate,
                           firstDate: DateTime(2020),
                           lastDate: DateTime.now(),
@@ -659,14 +719,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       child: ElevatedButton(
                         onPressed: () {
                           final parsedAmount = double.tryParse(
-                            amountController.text.replaceAll(
+                            amountInput.replaceAll(
                               RegExp(r'[^\d]'),
                               '',
                             ),
                           );
 
                           if (parsedAmount == null || parsedAmount <= 0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger?.showSnackBar(
                               const SnackBar(
                                 content: Text('Số tiền không hợp lệ'),
                               ),
@@ -676,7 +736,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
                           if (selectedWalletId == null ||
                               selectedCategoryId == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger?.showSnackBar(
                               const SnackBar(
                                 content: Text(
                                   'Vui lòng chọn đủ ví và danh mục',
@@ -691,17 +751,26 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             amount: parsedAmount,
                             walletId: selectedWalletId,
                             categoryId: selectedCategoryId,
-                            note: noteController.text.trim(),
+                            note: _composeEditedTransactionNote(
+                              categoryDetail: categoryDetailInput,
+                              note: noteInput,
+                            ),
                             date: selectedDate,
                           );
 
                           _applyTransactionUpdate(transaction, updated);
                           Navigator.pop(sheetContext);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Đã cập nhật giao dịch'),
-                            ),
-                          );
+                          if (mounted) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
+                                messenger?.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Đã cập nhật giao dịch'),
+                                  ),
+                                );
+                              }
+                            });
+                          }
                         },
                         child: const Text('Lưu thay đổi'),
                       ),
@@ -714,9 +783,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         );
       },
     );
-
-    amountController.dispose();
-    noteController.dispose();
   }
 
   void _applyTransactionUpdate(
@@ -778,6 +844,24 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     return payload;
   }
 
+  String _composeEditedTransactionNote({
+    required String categoryDetail,
+    required String note,
+  }) {
+    final detailValue = categoryDetail.trim();
+    final noteValue = note.trim();
+
+    if (detailValue.isEmpty) {
+      return noteValue;
+    }
+
+    if (noteValue.isEmpty) {
+      return detailValue;
+    }
+
+    return '$detailValue - $noteValue';
+  }
+
   _TransactionNoteParts _parseTransactionNote(String? rawNote) {
     if (rawNote == null || rawNote.trim().isEmpty) {
       return const _TransactionNoteParts();
@@ -787,11 +871,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     try {
       final decoded = jsonDecode(note);
       if (decoded is Map<String, dynamic>) {
-        return _TransactionNoteParts(
-          detail: (decoded['detail'] as String?)?.trim(),
-          note:
-              (decoded['note'] as String?)?.trim() ??
-              (decoded['content'] as String?)?.trim(),
+        final parsedDetail =
+            (decoded['detail'] as String?)?.trim() ??
+            (decoded['categoryDetail'] as String?)?.trim() ??
+            (decoded['category_detail'] as String?)?.trim();
+        final parsedNote =
+            (decoded['note'] as String?)?.trim() ??
+            (decoded['content'] as String?)?.trim() ??
+            (decoded['remark'] as String?)?.trim();
+        return _normalizeNoteParts(
+          _TransactionNoteParts(detail: parsedDetail, note: parsedNote),
         );
       }
     } catch (_) {
@@ -804,10 +893,80 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       final content = parts.length > 1
           ? parts.sublist(1).join('|').trim()
           : null;
-      return _TransactionNoteParts(detail: detail, note: content);
+      return _normalizeNoteParts(
+        _TransactionNoteParts(detail: detail, note: content),
+      );
+    }
+
+    // Legacy note format from add transaction screen:
+    // - "<detail> - <note>"
+    // - "Khác - <other detail> - <note>"
+    final dashParts = note
+        .split(RegExp(r'\s+-\s+'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (dashParts.length >= 2) {
+      final isOther = dashParts.first.toLowerCase() == 'khác';
+      final firstPart = dashParts.first;
+
+      if (!isOther && !_knownCategoryDetailOptions.contains(firstPart)) {
+        return _TransactionNoteParts(note: note);
+      }
+
+      if (isOther && dashParts.length == 2) {
+        return _TransactionNoteParts(detail: note);
+      }
+
+      if (isOther && dashParts.length >= 3) {
+        final detail = '${dashParts[0]} - ${dashParts[1]}';
+        final content = dashParts.sublist(2).join(' - ').trim();
+        return _normalizeNoteParts(
+          _TransactionNoteParts(detail: detail, note: content),
+        );
+      }
+
+      final detail = dashParts.first;
+      final content = dashParts.sublist(1).join(' - ').trim();
+      return _normalizeNoteParts(
+        _TransactionNoteParts(detail: detail, note: content),
+      );
+    }
+
+    if (_isCategoryDetailValue(note)) {
+      return _TransactionNoteParts(detail: note);
     }
 
     return _TransactionNoteParts(note: note);
+  }
+
+  _TransactionNoteParts _normalizeNoteParts(_TransactionNoteParts parts) {
+    final detail = parts.detail;
+    final note = parts.note;
+
+    if (detail == null || note == null) {
+      return parts;
+    }
+
+    final detailLooksLikeCategory = _isCategoryDetailValue(detail);
+    final noteLooksLikeCategory = _isCategoryDetailValue(note);
+
+    if (!detailLooksLikeCategory && noteLooksLikeCategory) {
+      // Some legacy data stores detail and note in reverse order.
+      return _TransactionNoteParts(detail: note, note: detail);
+    }
+
+    return parts;
+  }
+
+  bool _isCategoryDetailValue(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return _knownCategoryDetailOptions.contains(normalized) ||
+        normalized.startsWith('Khác -');
   }
 }
 
