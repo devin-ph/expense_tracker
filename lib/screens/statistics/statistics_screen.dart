@@ -33,37 +33,37 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       appBar: AppBar(title: const Text('Thống kê'), elevation: 0),
       body: Consumer2<TransactionNotifier, CategoryNotifier>(
         builder: (context, transactionNotifier, categoryNotifier, _) {
-              final monthlyTransactions = _transactionsInMonth(
-                transactionNotifier.transactions,
-                _selectedYear,
-                _selectedMonth,
-              );
-              final snapshot = _buildSnapshot(monthlyTransactions);
+          final monthlyTransactions = _transactionsInMonth(
+            transactionNotifier.transactions,
+            _selectedYear,
+            _selectedMonth,
+          );
+          final snapshot = _buildSnapshot(monthlyTransactions);
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    _buildSummarySection(snapshot),
-                    const SizedBox(height: AppSpacing.lg),
-                    _buildIncomeExpenseBarChart(
-                      transactionNotifier.transactions,
-                      year: _selectedYear,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _buildCategoryPieChart(monthlyTransactions, categoryNotifier),
-                    const SizedBox(height: AppSpacing.lg),
-                    _buildHeatmapChart(
-                      monthlyTransactions,
-                      year: _selectedYear,
-                      month: _selectedMonth,
-                    ),
-                  ],
+          return SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: AppSpacing.lg),
+                _buildSummarySection(snapshot),
+                const SizedBox(height: AppSpacing.lg),
+                _buildIncomeExpenseBarChart(
+                  transactionNotifier.transactions,
+                  year: _selectedYear,
                 ),
-              );
-            },
+                const SizedBox(height: AppSpacing.lg),
+                _buildCategoryPieChart(monthlyTransactions, categoryNotifier),
+                const SizedBox(height: AppSpacing.lg),
+                _buildHeatmapChart(
+                  monthlyTransactions,
+                  year: _selectedYear,
+                  month: _selectedMonth,
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -151,7 +151,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
 
     return _buildSectionCard(
-      title: 'Thu / Chi theo từng tháng trong $year (chạm để chọn tháng)',
+      title: 'Thu / Chi theo từng tháng - Năm $year',
       child: SizedBox(
         height: 240,
         child: BarChart(
@@ -325,33 +325,35 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildHeatmapChart(
-    List<Transaction> transactions,
-    {
+    List<Transaction> transactions, {
     required int year,
     required int month,
-  }
-  ) {
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final monthStart = DateTime(year, month, 1);
     final monthEnd = DateTime(year, month + 1, 0);
     final days = monthEnd.day;
-    final expensesByDay = List<double>.filled(days, 0);
+    final netByDay = List<double>.filled(days, 0);
 
-    for (final tx in transactions.where(
-      (t) => t.type == TransactionType.expense,
-    )) {
+    for (final tx in transactions) {
       if (tx.date.month != monthStart.month ||
           tx.date.year != monthStart.year) {
         continue;
       }
-      expensesByDay[tx.date.day - 1] += tx.amount;
+      final index = tx.date.day - 1;
+      if (tx.type == TransactionType.income) {
+        netByDay[index] += tx.amount;
+      } else {
+        netByDay[index] -= tx.amount;
+      }
     }
 
-    final maxExpense = expensesByDay.isEmpty
+    final maxAbsNet = netByDay.isEmpty
         ? 1.0
-        : math.max(1.0, expensesByDay.reduce(math.max));
+        : math.max(1.0, netByDay.map((value) => value.abs()).reduce(math.max));
 
     return _buildSectionCard(
-      title: 'Mức độ chi tiêu theo ngày - Tháng $month/$year',
+      title: 'Mức độ thu/chi - Tháng $month/$year',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -364,19 +366,31 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             spacing: 4,
             runSpacing: 4,
             children: List.generate(days, (index) {
-              final value = expensesByDay[index];
-              final intensity = ((value / maxExpense).clamp(0.0, 1.0)).toDouble();
+              final net = netByDay[index];
+              final intensity = ((net.abs() / maxAbsNet).clamp(
+                0.0,
+                1.0,
+              )).toDouble();
+              final cellColor = _heatmapColor(net, intensity, isDark: isDark);
               return Container(
-                width: 20,
-                height: 20,
+                width: 24,
+                height: 24,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: _heatmapColor(intensity),
+                  color: cellColor,
                   borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: Theme.of(
+                      context,
+                    ).dividerColor.withValues(alpha: 0.5),
+                  ),
                 ),
                 child: Text(
                   '${index + 1}',
-                  style: Theme.of(context).textTheme.labelSmall,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: _heatmapTextColor(cellColor),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               );
             }),
@@ -386,17 +400,72 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
   }
 
-  Color _heatmapColor(double intensity) {
-    const light = Color(0xFFFEE2E2);
-    const mid = Color(0xFFFCA5A5);
-    const dark = Color(0xFFB91C1C);
-    if (intensity <= 0) {
-      return light.withValues(alpha: 0.35);
+  Color _heatmapColor(double net, double intensity, {required bool isDark}) {
+    final positiveLight = isDark
+        ? const Color(0xFF14532D)
+        : const Color(0xFFDCFCE7);
+    final positiveMid = isDark
+        ? const Color(0xFF16A34A)
+        : const Color(0xFF86EFAC);
+    final positiveDark = isDark
+        ? const Color(0xFF22C55E)
+        : const Color(0xFF15803D);
+    final negativeLight = isDark
+        ? const Color(0xFF7F1D1D)
+        : const Color(0xFFFEE2E2);
+    final negativeMid = isDark
+        ? const Color(0xFFDC2626)
+        : const Color(0xFFFCA5A5);
+    final negativeDark = isDark
+        ? const Color(0xFFEF4444)
+        : const Color(0xFFB91C1C);
+    final neutral = isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB);
+
+    if (net == 0) {
+      return neutral;
     }
+
+    if (net > 0) {
+      if (intensity <= 0.5) {
+        return Color.lerp(positiveLight, positiveMid, intensity / 0.5) ??
+            positiveMid;
+      }
+      return Color.lerp(positiveMid, positiveDark, (intensity - 0.5) / 0.5) ??
+          positiveDark;
+    }
+
     if (intensity <= 0.5) {
-      return Color.lerp(light, mid, intensity / 0.5) ?? mid;
+      return Color.lerp(negativeLight, negativeMid, intensity / 0.5) ??
+          negativeMid;
     }
-    return Color.lerp(mid, dark, (intensity - 0.5) / 0.5) ?? dark;
+    return Color.lerp(negativeMid, negativeDark, (intensity - 0.5) / 0.5) ??
+        negativeDark;
+  }
+
+  Color _heatmapTextColor(Color background) {
+    final brightness = ThemeData.estimateBrightnessForColor(background);
+    return brightness == Brightness.dark ? Colors.white : Colors.black87;
+  }
+
+  Widget _heatmapLegendItem({required Color color, required String text}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Text(text, style: Theme.of(context).textTheme.labelSmall),
+      ],
+    );
   }
 
   Widget _buildSectionCard({required String title, required Widget child}) {
@@ -443,10 +512,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final income = _sumByType(current, TransactionType.income);
     final expense = _sumByType(current, TransactionType.expense);
 
-    return _StatsSnapshot(
-      income: income,
-      expense: expense,
-    );
+    return _StatsSnapshot(income: income, expense: expense);
   }
 
   double _sumByType(List<Transaction> tx, TransactionType type) {
@@ -465,7 +531,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
     return value.toStringAsFixed(0);
   }
-
 }
 
 class _SummaryMetric {
@@ -477,10 +542,7 @@ class _SummaryMetric {
 }
 
 class _StatsSnapshot {
-  _StatsSnapshot({
-    required this.income,
-    required this.expense,
-  });
+  _StatsSnapshot({required this.income, required this.expense});
 
   final double income;
   final double expense;

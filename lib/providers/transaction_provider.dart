@@ -1,29 +1,82 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import '../models/index.dart';
 
 // Transaction notifier
 class TransactionNotifier extends ChangeNotifier {
+  final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
+
   List<Transaction> _transactions = [];
   bool _isLoading = false;
+  String? _currentUserId;
+
+  final Map<String, List<Transaction>> _transactionStore = {};
 
   List<Transaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
 
-  TransactionNotifier() {
-    _initialize();
-  }
-
-  void _initialize() async {
+  Future<void> syncForUser(String? userId) async {
     _isLoading = true;
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 500));
 
+    _currentUserId = userId;
+    if (userId == null || userId.isEmpty) {
+      _transactions = [];
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    final local = _transactionStore.putIfAbsent(userId, () => <Transaction>[]);
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('transactions')
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        if (local.isEmpty) {
+          local.addAll(_buildDefaultTransactions(userId));
+        }
+        for (final tx in local) {
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('transactions')
+              .doc(tx.id)
+              .set(tx.toJson());
+        }
+      } else {
+        local
+          ..clear()
+          ..addAll(
+            snapshot.docs.map(
+              (doc) => Transaction.fromJson({...doc.data(), 'id': doc.id}),
+            ),
+          );
+      }
+    } catch (_) {
+      if (local.isEmpty) {
+        local.addAll(_buildDefaultTransactions(userId));
+      }
+    }
+
+    _transactions = local;
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  List<Transaction> _buildDefaultTransactions(String userId) {
     final now = DateTime.now();
-    _transactions = [
+    return [
       Transaction(
-        id: '1',
-        userId: 'user1',
-        walletId: '1',
+        id: '${userId}_tx_1',
+        userId: userId,
+        walletId: '${userId}_wallet_1',
         categoryId: 'cat1',
         type: TransactionType.expense,
         amount: 150000,
@@ -32,9 +85,9 @@ class TransactionNotifier extends ChangeNotifier {
         createdAt: now,
       ),
       Transaction(
-        id: '2',
-        userId: 'user1',
-        walletId: '1',
+        id: '${userId}_tx_2',
+        userId: userId,
+        walletId: '${userId}_wallet_1',
         categoryId: 'cat2',
         type: TransactionType.expense,
         amount: 50000,
@@ -43,9 +96,9 @@ class TransactionNotifier extends ChangeNotifier {
         createdAt: now.subtract(const Duration(hours: 2)),
       ),
       Transaction(
-        id: '3',
-        userId: 'user1',
-        walletId: '1',
+        id: '${userId}_tx_3',
+        userId: userId,
+        walletId: '${userId}_wallet_1',
         categoryId: 'cat_income',
         type: TransactionType.income,
         amount: 2000000,
@@ -54,13 +107,21 @@ class TransactionNotifier extends ChangeNotifier {
         createdAt: now.subtract(const Duration(days: 5)),
       ),
     ];
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   void addTransaction(Transaction transaction) {
-    _transactions.add(transaction);
+    if (_currentUserId == null) return;
+    final scoped = transaction.userId == _currentUserId
+        ? transaction
+        : transaction.copyWith(userId: _currentUserId);
+    _transactions.add(scoped);
+    _transactionStore[_currentUserId!] = _transactions;
+    _firestore
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('transactions')
+        .doc(scoped.id)
+        .set(scoped.toJson());
     notifyListeners();
   }
 
@@ -68,12 +129,30 @@ class TransactionNotifier extends ChangeNotifier {
     final index = _transactions.indexWhere((t) => t.id == transaction.id);
     if (index != -1) {
       _transactions[index] = transaction;
+      if (_currentUserId != null) {
+        _transactionStore[_currentUserId!] = _transactions;
+        _firestore
+            .collection('users')
+            .doc(_currentUserId)
+            .collection('transactions')
+            .doc(transaction.id)
+            .set(transaction.toJson());
+      }
       notifyListeners();
     }
   }
 
   void deleteTransaction(String id) {
     _transactions.removeWhere((t) => t.id == id);
+    if (_currentUserId != null) {
+      _transactionStore[_currentUserId!] = _transactions;
+      _firestore
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('transactions')
+          .doc(id)
+          .delete();
+    }
     notifyListeners();
   }
 

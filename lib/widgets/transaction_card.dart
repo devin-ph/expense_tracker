@@ -17,17 +17,17 @@ class TransactionCard extends StatelessWidget {
   final VoidCallback? onLongPress;
 
   const TransactionCard({
-    Key? key,
+    super.key,
     required this.categoryName,
     required this.categoryIcon,
     required this.amount,
     this.note,
-    this.attachments = const [],
+    List<String>? attachments,
     required this.dateTime,
     this.isIncome = false,
     this.onTap,
     this.onLongPress,
-  }) : super(key: key);
+  }) : attachments = attachments ?? const <String>[];
 
   String _attachmentName(String payload) {
     try {

@@ -50,11 +50,19 @@ dependencies:
   # Local Storage
   shared_preferences: ^2.2.0
 
+  # Image Picker
+  image_picker: ^1.0.0
+
   # File and image picker
   file_picker: ^8.1.2
 
   # HTTP client
   http: ^1.2.2
+
+  # Firebase
+  firebase_core: ^4.5.0
+  firebase_auth: ^6.2.0
+  cloud_firestore: ^6.1.3
 
 dev_dependencies:
   flutter_test:

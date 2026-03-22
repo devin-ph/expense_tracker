@@ -10,14 +10,14 @@ class CurrencyInputField extends StatefulWidget {
   final bool isExpense;
 
   const CurrencyInputField({
-    Key? key,
+    super.key,
     required this.controller,
     required this.Label,
     this.hintText,
     this.onChanged,
     this.validator,
     this.isExpense = true,
-  }) : super(key: key);
+  });
 
   @override
   State<CurrencyInputField> createState() => _CurrencyInputFieldState();
