@@ -15,89 +15,34 @@ class TransactionsScreen extends StatefulWidget {
   State<TransactionsScreen> createState() => _TransactionsScreenState();
 }
 
-class _TransactionsScreenState extends State<TransactionsScreen>
-    with TickerProviderStateMixin {
-  late TabController _tabController;
+class _TransactionsScreenState extends State<TransactionsScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
+  TransactionType?
+  _selectedFilter; // null = all, income = income, expense = expense
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _startDate = DateTime.now().subtract(const Duration(days: 30));
     _endDate = DateTime.now();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+    _selectedFilter = null; // Show all by default
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lịch sử giao dịch'),
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          onTap: (_) => setState(() {}),
-          tabs: const [
-            Tab(text: 'Thu nhập'),
-            Tab(text: 'Chi tiêu'),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: const Text('Lịch sử giao dịch'), elevation: 0),
       body: Column(
         children: [
           // Date filter
           _buildDateFilter(context),
+          // Filter buttons
+          _buildFilterButtons(),
           // Statistics
-          Consumer<TransactionNotifier>(
-            builder: (context, transactionNotifier, _) {
-              final isIncome = _tabController.index == 0;
-              final type = isIncome
-                  ? TransactionType.income
-                  : TransactionType.expense;
-
-              final filtered = transactionNotifier
-                  .getTransactionsByDateRange(
-                    _startDate ?? DateTime.now(),
-                    _endDate ?? DateTime.now(),
-                  )
-                  .where((t) => t.type == type)
-                  .toList();
-
-              final total = filtered.fold(0.0, (sum, t) => sum + t.amount);
-
-              return Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatBox(
-                        'Tổng ${isIncome ? 'Thu nhập' : 'Chi tiêu'}',
-                        AppCurrency.format(total),
-                        isIncome ? Colors.green : Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+          _buildStatistics(),
           // Transactions list
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildTransactionList(TransactionType.income),
-                _buildTransactionList(TransactionType.expense),
-              ],
-            ),
-          ),
+          Expanded(child: _buildTransactionList()),
         ],
       ),
     );
@@ -185,18 +130,134 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     );
   }
 
-  Widget _buildTransactionList(TransactionType type) {
+  Widget _buildFilterButtons() {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildFilterButton(
+              'Thu nhập',
+              TransactionType.income,
+              Colors.green,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: _buildFilterButton(
+              'Chi tiêu',
+              TransactionType.expense,
+              Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterButton(String label, TransactionType type, Color color) {
+    final isSelected = _selectedFilter == type;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedFilter = isSelected ? null : type;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          vertical: AppSpacing.md,
+          horizontal: AppSpacing.lg,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.2) : Colors.transparent,
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(AppBorderRadius.md),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: isSelected ? color : Colors.grey,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatistics() {
+    return Consumer<TransactionNotifier>(
+      builder: (context, transactionNotifier, _) {
+        final filtered = transactionNotifier.getTransactionsByDateRange(
+          _startDate ?? DateTime.now(),
+          _endDate ?? DateTime.now(),
+        );
+
+        // Filter by selected type if applicable
+        final filteredByType = _selectedFilter == null
+            ? filtered
+            : filtered.where((t) => t.type == _selectedFilter).toList();
+
+        // Calculate totals
+        final incomeTotal = filteredByType
+            .where((t) => t.type == TransactionType.income)
+            .fold(0.0, (sum, t) => sum + t.amount);
+        final expenseTotal = filteredByType
+            .where((t) => t.type == TransactionType.expense)
+            .fold(0.0, (sum, t) => sum + t.amount);
+
+        return Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              // Show income stat if no filter or income filter is selected
+              if (_selectedFilter == null ||
+                  _selectedFilter == TransactionType.income)
+                Expanded(
+                  child: _buildStatBox(
+                    'Tổng Thu nhập',
+                    AppCurrency.format(incomeTotal),
+                    Colors.green,
+                  ),
+                ),
+              // Add spacing between stats only if both are shown
+              if (_selectedFilter == null) const SizedBox(width: AppSpacing.md),
+              // Show expense stat if no filter or expense filter is selected
+              if (_selectedFilter == null ||
+                  _selectedFilter == TransactionType.expense)
+                Expanded(
+                  child: _buildStatBox(
+                    'Tổng Chi tiêu',
+                    AppCurrency.format(expenseTotal),
+                    Colors.red,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTransactionList() {
     return Consumer2<TransactionNotifier, CategoryNotifier>(
       builder: (context, transactionNotifier, categoryNotifier, _) {
-        final filtered =
-            transactionNotifier
-                .getTransactionsByDateRange(
-                  _startDate ?? DateTime.now(),
-                  _endDate ?? DateTime.now(),
-                )
-                .where((t) => t.type == type)
-                .toList()
-              ..sort((a, b) => b.date.compareTo(a.date));
+        var filtered = transactionNotifier.getTransactionsByDateRange(
+          _startDate ?? DateTime.now(),
+          _endDate ?? DateTime.now(),
+        );
+
+        // Filter by selected type if applicable
+        if (_selectedFilter != null) {
+          filtered = filtered.where((t) => t.type == _selectedFilter).toList();
+        }
+
+        // Sort by date descending
+        filtered.sort((a, b) => b.date.compareTo(a.date));
 
         if (filtered.isEmpty) {
           return Center(
@@ -222,7 +283,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               amount: transaction.amount,
               note: transaction.note,
               dateTime: transaction.date,
-              isIncome: type == TransactionType.income,
+              isIncome: transaction.type == TransactionType.income,
               onTap: () {
                 // Show transaction details
               },
